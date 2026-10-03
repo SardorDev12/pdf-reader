@@ -41,14 +41,15 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID",
+      "url": "https://u.expo.dev/96bb2bc8-7e9f-4bc8-a575-9d6b97676540",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "96bb2bc8-7e9f-4bc8-a575-9d6b97676540"
       }
-    }
+    },
+    "owner": "walterobrien1226"
   }
 }
