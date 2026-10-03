@@ -12,7 +12,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - '.github/workflows/ci.yml'
       - '.github/workflows/eas-build.yml'
   workflow_dispatch:
     inputs:

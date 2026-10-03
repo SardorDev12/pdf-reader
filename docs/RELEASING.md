@@ -1,6 +1,6 @@
 # Releasing Smart Reader (builds + OTA updates)
 
-Everything below is done in a browser: expo.dev, GitHub and (for the Play Store) Google Play Console / Google Cloud.
+Work happens directly on `main` (no pull requests). Everything below is done in a browser: expo.dev, GitHub and (for the Play Store) Google Play Console / Google Cloud.
 No local CLI is needed; GitHub Actions runs the EAS CLI for you.
 
 ## How it works
@@ -9,7 +9,6 @@ No local CLI is needed; GitHub Actions runs the EAS CLI for you.
 | --- | --- | --- |
 | Merge/push to `main` | **EAS Update (OTA)** workflow | JS/asset-only update published to the `production` update branch; installed apps pick it up on next launch |
 | Push a tag like `v1.0.1` (or run **EAS Build** manually) | **EAS Build (Android)** workflow | New store-ready `.aab` (production) or installable `.apk` (preview) built on Expo's servers |
-| Open a pull request | **CI** workflow | Type-check only |
 
 **Rule of thumb:** changed only screens/logic/images → just merge to `main` (OTA). Added or upgraded a native
 library, changed `app.json` plugins/permissions/icon/splash, or upgraded Expo → bump `version` in `app.json` and ship a
