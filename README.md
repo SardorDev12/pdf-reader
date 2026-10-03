@@ -27,6 +27,11 @@ npx expo run:android     # or build a dev build locally
 npm run typecheck
 ```
 
+## Releasing
+
+GitHub Actions builds the Android app and publishes OTA updates with EAS. Step-by-step platform setup (Expo,
+GitHub, Google Play) is in [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Data
 
 Everything is stored locally in SQLite (`smart-reader.db`) and works fully offline; nothing leaves the device.

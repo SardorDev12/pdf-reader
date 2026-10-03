@@ -1,0 +1,66 @@
+# Builds the Android app on EAS (cloud). Runs when you push a version tag (v1.0.0)
+# or manually from the Actions tab. Needs the EXPO_TOKEN repository secret.
+name: EAS Build (Android)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Build profile
+        type: choice
+        options: [production, preview]
+        default: production
+      submit:
+        description: Submit the build to Google Play after it finishes
+        type: boolean
+        default: false
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PROFILE: ${{ inputs.profile || 'production' }}
+      SUBMIT: ${{ inputs.submit && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Preflight
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN secret. Add it under Settings > Secrets and variables > Actions (see docs/RELEASING.md)."; exit 1
+          fi
+          if grep -q REPLACE_WITH_EAS_PROJECT_ID app.json; then
+            echo "::error::app.json still contains REPLACE_WITH_EAS_PROJECT_ID. Paste your Expo project ID (see docs/RELEASING.md)."; exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION=$(node -p "require('./app.json').expo.version")
+            if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match app.json version ${VERSION} (expected v${VERSION})."; exit 1
+            fi
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - name: Start EAS build
+        run: |
+          ARGS="--platform android --profile $PROFILE --non-interactive --no-wait"
+          if [ "$SUBMIT" = "true" ]; then ARGS="$ARGS --auto-submit"; fi
+          eas build $ARGS

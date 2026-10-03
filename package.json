@@ -22,6 +22,7 @@
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "~57.0.24",
     "jszip": "^3.10.2",
     "react": "19.2.3",
     "react-native": "0.86.3",

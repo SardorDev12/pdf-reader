@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, SectionTitle } from '@/components/ui';
 import { revisitRate } from '@/lib/analytics';
@@ -16,7 +19,30 @@ export default function Settings() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { fontSize, setFontSize, readerTheme, setReaderTheme } = useSettings();
+  const [checking, setChecking] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
   const stats = useQuery({ queryKey: ['revisit'], queryFn: revisitRate });
+
+  const checkForUpdates = async () => {
+    setChecking(true);
+    setUpdateNote(null);
+    try {
+      const check = await Updates.checkForUpdateAsync();
+      if (!check.isAvailable) {
+        setUpdateNote('You are on the latest version.');
+        return;
+      }
+      await Updates.fetchUpdateAsync();
+      Alert.alert('Update ready', 'Restart the app to apply the update.', [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Restart now', onPress: () => Updates.reloadAsync() },
+      ]);
+    } catch (e) {
+      setUpdateNote(e instanceof Error ? e.message : 'Could not check for updates.');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={[styles.root, { paddingTop: insets.top + 8 }]}>
@@ -58,6 +84,24 @@ export default function Settings() {
               </Pressable>
             ))}
           </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle>App</SectionTitle>
+        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>Version {Constants.expoConfig?.version}</Text>
+          {Updates.isEnabled ? (
+            <>
+              <Text style={{ color: c.textMuted, fontSize: 13 }}>
+                Channel {Updates.channel ?? '—'} · {Updates.isEmbeddedLaunch ? 'built-in bundle' : `update ${Updates.updateId?.slice(0, 8)}`}
+              </Text>
+              <Button label="Check for updates" variant="secondary" onPress={checkForUpdates} loading={checking} />
+              {updateNote ? <Text style={{ color: c.textMuted, fontSize: 13 }}>{updateNote}</Text> : null}
+            </>
+          ) : (
+            <Text style={{ color: c.textMuted, fontSize: 13 }}>Over-the-air updates are available in release builds.</Text>
+          )}
         </View>
       </View>
 

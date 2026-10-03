@@ -1,0 +1,64 @@
+# Publishes a JavaScript-only over-the-air update with EAS Update.
+# Runs on every push to main (-> "production" branch) or manually (pick "preview" or "production").
+# Needs the EXPO_TOKEN repository secret.
+#
+# IMPORTANT: OTA updates can only change JS/assets. If you added or upgraded a native
+# library, bump "version" in app.json and ship a new build (push a v* tag) instead.
+name: EAS Update (OTA)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/eas-build.yml'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: EAS Update branch to publish to
+        type: choice
+        options: [production, preview]
+        default: production
+
+concurrency:
+  group: eas-update-${{ inputs.branch || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      UPDATE_BRANCH: ${{ inputs.branch || 'production' }}
+      UPDATE_MESSAGE: ${{ github.event.head_commit.message || format('Manual update from {0}', github.ref_name) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Preflight
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN secret (see docs/RELEASING.md)."; exit 1
+          fi
+          if grep -q REPLACE_WITH_EAS_PROJECT_ID app.json; then
+            echo "::error::app.json still contains REPLACE_WITH_EAS_PROJECT_ID (see docs/RELEASING.md)."; exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - name: Publish update
+        run: eas update --branch "$UPDATE_BRANCH" --message "$UPDATE_MESSAGE" --non-interactive
