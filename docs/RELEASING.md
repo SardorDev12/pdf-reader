@@ -1,4 +1,4 @@
-# Releasing Smart Reader (builds + OTA updates)
+# Releasing Pagemark (builds + OTA updates)
 
 Work happens directly on `main` (no pull requests). Everything below is done in a browser: expo.dev, GitHub and (for the Play Store) Google Play Console / Google Cloud.
 No local CLI is needed; GitHub Actions runs the EAS CLI for you.
@@ -24,7 +24,7 @@ Do these in order. Order matters: the workflows refuse to run until steps 3 and 
 ### 1. Create the Expo project (expo.dev)
 
 1. Sign in at <https://expo.dev> (create a free account if needed).
-2. **Projects → Create a project**. Use display name `Smart Reader` and **slug `smart-reader`** (must match
+2. **Projects → Create a project**. Use display name `Pagemark` and **slug `pagemark`** (must match
    `expo.slug` in `app.json`).
 3. Open the project's **Overview** page and copy the **Project ID** (a UUID).
 
@@ -61,7 +61,7 @@ started from the dashboard, where Expo generates and stores the keystore for you
 2. Platform **Android**, profile **production**, branch `main`.
 3. When asked about credentials, choose to let Expo **generate a new keystore**.
 4. Wait for it to finish. Afterwards confirm under Project → **Credentials → Android** that a keystore exists for
-   `com.smartreader.app`. All later builds (including from GitHub Actions) reuse it.
+   `com.pagemark.app`. All later builds (including from GitHub Actions) reuse it.
 
 > I couldn't open the Expo docs from my environment to double-check the exact button names on the dashboard, so the
 > labels above may differ slightly. If you can't find a way to generate the keystore in the dashboard, tell me what
@@ -79,10 +79,10 @@ Builds made with the `production` profile listen to the `production` channel; th
 ## Part 2 — Publish to Google Play (one-time, then automated)
 
 1. **Google Play Console** (<https://play.google.com/console>, one-time developer registration fee applies):
-   **Create app** → name *Smart Reader*, default language, app/free, accept declarations.
+   **Create app** → name *Pagemark*, default language, app/free, accept declarations.
    Complete the dashboard tasks (privacy policy URL, content rating, data safety, target audience). The app stores
    everything locally and collects no data, which you declare in **Data safety**.
-2. Use package name **`com.smartreader.app`** (it's baked into the build; Play ties the app to it permanently, so
+2. Use package name **`com.pagemark.app`** (it's baked into the build; Play ties the app to it permanently, so
    change it in `app.json` *before* your first upload if you want a different one).
 3. **First upload must be manual.** On expo.dev open the finished production build → download the `.aab` →
    Play Console → **Testing → Internal testing → Create new release → upload the `.aab`** → add testers → roll out.
@@ -138,6 +138,6 @@ your phone and install the APK. Preview builds receive updates from the `preview
 | Workflow fails: *REPLACE_WITH_EAS_PROJECT_ID* | Do step 4 (both occurrences). |
 | Tag/version mismatch error | Tag must equal `v` + `expo.version` in `app.json`. |
 | Build fails asking for credentials / keystore | Do step 6 (first build from the dashboard). |
-| *Slug mismatch* / project not found | Project slug on expo.dev must be `smart-reader`, and the token's account must own it. |
+| *Slug mismatch* / project not found | Project slug on expo.dev must be `pagemark`, and the token's account must own it. |
 | Update published but the phone doesn't get it | The installed build's `version` must equal `app.json`'s `version` at publish time; the build's channel must be linked to the branch (step 7); updates apply on the **second** launch. Dev builds and Expo Go never receive updates. |
 | App crashes right after an OTA | You shipped JS that needs a native change. Bump `version`, ship a new build, and re-publish. |

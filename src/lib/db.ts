@@ -91,7 +91,7 @@ async function migrate(db: SQLite.SQLiteDatabase) {
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const db = await SQLite.openDatabaseAsync('smart-reader.db');
+      const db = await SQLite.openDatabaseAsync('pagemark.db');
       await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
       await migrate(db);
       return db;

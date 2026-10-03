@@ -11,7 +11,7 @@ export default function Onboarding() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.hero}>
-        <Image source={require('../../assets/icon.png')} style={styles.icon} accessibilityLabel="Smart Reader" />
+        <Image source={require('../../assets/icon.png')} style={styles.icon} accessibilityLabel="Pagemark" />
         <Text style={styles.title}>Read.{'\n'}Capture.{'\n'}Remember.</Text>
         <Text style={styles.body}>
           Build a personal knowledge layer on top of your books. Save words and passages without leaving the page, then

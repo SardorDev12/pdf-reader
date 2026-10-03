@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
-const ONBOARDED_KEY = 'smart-reader.onboarded';
+const ONBOARDED_KEY = 'pagemark.onboarded';
 
 type AppState = {
   ready: boolean;

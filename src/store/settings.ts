@@ -23,6 +23,6 @@ export const useSettings = create<SettingsState>()(
       setFontSize: (n) => set({ fontSize: Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n))) }),
       setReaderTheme: (readerTheme) => set({ readerTheme }),
     }),
-    { name: 'smart-reader.settings', storage: createJSONStorage(() => AsyncStorage) },
+    { name: 'pagemark.settings', storage: createJSONStorage(() => AsyncStorage) },
   ),
 );

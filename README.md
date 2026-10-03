@@ -1,4 +1,4 @@
-# Smart Reader
+# Pagemark
 
 An offline-first Android EPUB reader (Expo + React Native) for building a personal knowledge layer on top of books:
 **Read → Capture → Organize → Revisit.**
@@ -34,7 +34,7 @@ GitHub, Google Play) is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Data
 
-Everything is stored locally in SQLite (`smart-reader.db`) and works fully offline; nothing leaves the device.
+Everything is stored locally in SQLite (`pagemark.db`) and works fully offline; nothing leaves the device.
 Deleting a book removes its words, passages, notes and bookmarks with it (`ON DELETE CASCADE`).
 
 ## Layout
