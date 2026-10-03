@@ -1,18 +1,12 @@
 # Publishes a JavaScript-only over-the-air update with EAS Update.
-# Runs on every push to main (-> "production" branch) or manually (pick "preview" or "production").
+# Manual only: Actions tab > EAS Update (OTA) > Run workflow (pick "preview" or "production").
 # Needs the EXPO_TOKEN repository secret.
 #
 # IMPORTANT: OTA updates can only change JS/assets. If you added or upgraded a native
-# library, bump "version" in app.json and ship a new build (push a v* tag) instead.
+# library, bump "version" in app.json and ship a new build (run EAS Build) instead.
 name: EAS Update (OTA)
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/workflows/eas-build.yml'
   workflow_dispatch:
     inputs:
       branch:

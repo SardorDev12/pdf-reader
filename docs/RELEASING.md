@@ -5,21 +5,24 @@ No local CLI is needed; GitHub Actions runs the EAS CLI for you.
 
 ## How it works
 
-| You do | What runs | Result |
-| --- | --- | --- |
-| Merge/push to `main` | **EAS Update (OTA)** workflow | JS/asset-only update published to the `production` update branch; installed apps pick it up on next launch |
-| Push a tag like `v1.0.1` (or run **EAS Build** manually) | **EAS Build (Android)** workflow | New store-ready `.aab` (production) or installable `.apk` (preview) built on Expo's servers |
+Nothing runs automatically. Both workflows are **manual**: open the repo's **Actions** tab, pick a workflow and
+press **Run workflow**.
 
-**Rule of thumb:** changed only screens/logic/images → just merge to `main` (OTA). Added or upgraded a native
+| Workflow | What it does |
+| --- | --- |
+| **EAS Update (OTA)** | Publishes a JS/asset-only update to the `production` (or `preview`) update branch; installed apps pick it up on next launch |
+| **EAS Build (Android)** | Builds a store-ready `.aab` (production) or an installable `.apk` (preview) on Expo's servers; optionally submits to Google Play |
+
+**Rule of thumb:** changed only screens/logic/images → commit to `main` and run the OTA workflow. Added or upgraded a native
 library, changed `app.json` plugins/permissions/icon/splash, or upgraded Expo → bump `version` in `app.json` and ship a
-new build (tag). OTA updates only reach installed builds whose `version` matches (`runtimeVersion` policy is
+new build (run the build workflow). OTA updates only reach installed builds whose `version` matches (`runtimeVersion` policy is
 `appVersion`), so a version bump also protects old installs from receiving JS they can't run.
 
 ---
 
 ## Part 1 — One-time setup
 
-Do these in order. Order matters: the workflows refuse to run until steps 3 and 4 are done, which is intentional.
+Do these in order. The workflows refuse to run until steps 3 and 4 are done, which is intentional.
 
 ### 1. Create the Expo project (expo.dev)
 
@@ -44,8 +47,7 @@ Do these in order. Order matters: the workflows refuse to run until steps 3 and 
 2. Replace **both** occurrences of `REPLACE_WITH_EAS_PROJECT_ID`:
    - `updates.url` → `https://u.expo.dev/<PROJECT_ID>`
    - `extra.eas.projectId` → `<PROJECT_ID>`
-3. Commit to `main`. (This push triggers the OTA workflow; with steps 1–3 done it should go green. If the project has
-   no build yet it simply publishes an update nobody can receive yet.)
+3. Commit to `main` (nothing runs automatically).
 
 ### 5. Connect GitHub to the Expo project (expo.dev) — recommended
 
@@ -104,8 +106,8 @@ Builds made with the `production` profile listen to the `production` channel; th
 
 ### Ship a JS-only change (OTA)
 
-1. Merge your change into `main` on GitHub.
-2. **Actions → EAS Update (OTA)** runs automatically. A green run means the update is live on branch `production`.
+1. Commit your change to `main`.
+2. **Actions → EAS Update (OTA) → Run workflow** (branch `production`). A green run means the update is live.
 3. Verify on expo.dev → **Updates**. On a phone, open the app and close/reopen it (the update downloads on launch and
    applies the next time the app starts), or open **Settings → App → Check for updates**.
 
@@ -115,12 +117,9 @@ with the `preview` profile.
 ### Ship a new native build
 
 1. Edit `app.json` on GitHub and bump `version` (e.g. `1.0.0` → `1.1.0`). Commit to `main`.
-2. Create the tag so it matches exactly: **GitHub → Releases → Draft a new release → Choose a tag → type `v1.1.0` →
-   Create new tag on publish → Publish release.** The tag must be `v` + the `app.json` version or the workflow stops
-   with a clear error.
-3. **Actions → EAS Build (Android)** starts; the job just queues the build and exits. Follow progress on
-   expo.dev → **Builds**. Remote build numbers (`versionCode`) auto-increment.
-4. Download the `.aab` for the Play Console, or rerun the workflow manually with *submit* ticked to push it to Play
+2. **Actions → EAS Build (Android) → Run workflow**, profile `production`. The job just queues the build and exits.
+   Follow progress on expo.dev → **Builds**. Remote build numbers (`versionCode`) auto-increment.
+3. Download the `.aab` for the Play Console, or rerun the workflow manually with *submit* ticked to push it to Play
    automatically.
 
 ### Get a test APK on your phone
@@ -136,7 +135,6 @@ your phone and install the APK. Preview builds receive updates from the `preview
 | --- | --- |
 | Workflow fails: *Missing EXPO_TOKEN* | Redo step 2–3; secret name must be exactly `EXPO_TOKEN`. |
 | Workflow fails: *REPLACE_WITH_EAS_PROJECT_ID* | Do step 4 (both occurrences). |
-| Tag/version mismatch error | Tag must equal `v` + `expo.version` in `app.json`. |
 | Build fails asking for credentials / keystore | Do step 6 (first build from the dashboard). |
 | *Slug mismatch* / project not found | Project slug on expo.dev must be `pagemark`, and the token's account must own it. |
 | Update published but the phone doesn't get it | The installed build's `version` must equal `app.json`'s `version` at publish time; the build's channel must be linked to the branch (step 7); updates apply on the **second** launch. Dev builds and Expo Go never receive updates. |

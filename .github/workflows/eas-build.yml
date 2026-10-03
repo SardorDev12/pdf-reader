@@ -1,10 +1,8 @@
-# Builds the Android app on EAS (cloud). Runs when you push a version tag (v1.0.0)
-# or manually from the Actions tab. Needs the EXPO_TOKEN repository secret.
+# Builds the Android app on EAS (cloud). Manual only: Actions tab > EAS Build (Android) > Run workflow.
+# Needs the EXPO_TOKEN repository secret.
 name: EAS Build (Android)
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       profile:
