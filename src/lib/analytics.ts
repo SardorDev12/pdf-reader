@@ -8,6 +8,10 @@ export type AnalyticsEvent =
   | 'word_saved'
   | 'passage_saved'
   | 'passage_opened'
+  | 'note_saved'
+  | 'note_opened'
+  | 'bookmark_added'
+  | 'bookmark_opened'
   | 'vocabulary_opened'
   | 'book_completed';
 
@@ -34,7 +38,12 @@ export async function revisitRate(): Promise<{ saved: number; opened: number; ra
   const db = await getDb();
   const count = async (name: string) =>
     (await db.getFirstAsync<{ c: number }>('SELECT COUNT(*) AS c FROM analytics_events WHERE name = ?', name))?.c ?? 0;
-  const saved = (await count('passage_saved')) + (await count('word_saved'));
-  const opened = (await count('passage_opened')) + (await count('vocabulary_opened'));
+  const saved =
+    (await count('passage_saved')) + (await count('word_saved')) + (await count('note_saved')) + (await count('bookmark_added'));
+  const opened =
+    (await count('passage_opened')) +
+    (await count('vocabulary_opened')) +
+    (await count('note_opened')) +
+    (await count('bookmark_opened'));
   return { saved, opened, rate: saved ? Math.min(1, opened / saved) : 0 };
 }

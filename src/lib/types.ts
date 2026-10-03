@@ -1,5 +1,3 @@
-export type SyncStatus = 'pending' | 'synced' | 'failed';
-
 /** Stable content location. The CFI is the primary key for navigation; the rest is fallback/context. */
 export type Location = {
   chapterId?: string;
@@ -52,4 +50,27 @@ export type SavedPassage = {
   chapterLabel?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type Note = {
+  id: string;
+  bookId: string;
+  title: string;
+  content: string;
+  /** optional quoted text the note is attached to */
+  quote?: string | null;
+  location: Location;
+  chapterLabel?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Bookmark = {
+  id: string;
+  bookId: string;
+  title: string;
+  location: Location;
+  chapterLabel?: string | null;
+  progressPercent: number;
+  createdAt: string;
 };

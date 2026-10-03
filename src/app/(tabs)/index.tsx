@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Cover, EmptyState, ProgressBar, SectionTitle } from '@/components/ui';
 import { pickAndImportEpub } from '@/lib/epub';
 import { useAfterWrite, useBooks, useDeleteBook, useSearch } from '@/lib/hooks';
+import { openInBook } from '@/lib/navigation';
 import type { Book } from '@/lib/types';
 import { useColors } from '@/theme';
 
@@ -76,7 +77,7 @@ export default function Library() {
 
       {searching ? (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {search.data && !search.data.books.length && !search.data.vocabulary.length && !search.data.passages.length ? (
+          {search.data && !Object.values(search.data).some((list) => list.length) ? (
             <EmptyState icon="search" title="No results" body={`Nothing matches “${query.trim()}”.`} />
           ) : null}
           {search.data?.books.length ? (
@@ -111,6 +112,33 @@ export default function Library() {
                   sub={p.text}
                   icon="bookmark"
                   onPress={() => router.push({ pathname: '/passage/[id]', params: { id: p.id } })}
+                />
+              ))}
+            </View>
+          ) : null}
+          {search.data?.notes.length ? (
+            <View style={styles.section}>
+              <SectionTitle>Notes</SectionTitle>
+              {search.data.notes.map((n) => (
+                <ResultRow
+                  key={n.id}
+                  title={n.title || n.content}
+                  sub={n.title ? n.content : n.quote ?? undefined}
+                  icon="create"
+                  onPress={() => router.push({ pathname: '/note/[id]', params: { id: n.id } })}
+                />
+              ))}
+            </View>
+          ) : null}
+          {search.data?.bookmarks.length ? (
+            <View style={styles.section}>
+              <SectionTitle>Bookmarks</SectionTitle>
+              {search.data.bookmarks.map((b) => (
+                <ResultRow
+                  key={b.id}
+                  title={b.title}
+                  icon="bookmark"
+                  onPress={() => openInBook(router, b.bookId, b.location, 'bookmark')}
                 />
               ))}
             </View>

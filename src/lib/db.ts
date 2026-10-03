@@ -15,56 +15,60 @@ const MIGRATIONS: string[] = [
     format TEXT NOT NULL DEFAULT 'epub',
     last_opened_at TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    updated_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS reading_progress (
     id TEXT PRIMARY KEY NOT NULL,
-    book_id TEXT NOT NULL UNIQUE,
+    book_id TEXT NOT NULL UNIQUE REFERENCES books(id) ON DELETE CASCADE,
     location TEXT NOT NULL DEFAULT '{}',
     progress_percent REAL NOT NULL DEFAULT 0,
-    updated_at TEXT NOT NULL,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    updated_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS vocabulary (
     id TEXT PRIMARY KEY NOT NULL,
-    book_id TEXT NOT NULL,
+    book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     word TEXT NOT NULL,
     context TEXT NOT NULL DEFAULT '',
     meaning TEXT,
     location TEXT NOT NULL DEFAULT '{}',
     chapter_label TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    updated_at TEXT NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS idx_vocab_book ON vocabulary(book_id, deleted);
+  CREATE INDEX IF NOT EXISTS idx_vocab_book ON vocabulary(book_id);
   CREATE TABLE IF NOT EXISTS saved_passages (
     id TEXT PRIMARY KEY NOT NULL,
-    book_id TEXT NOT NULL,
+    book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     text TEXT NOT NULL,
     location TEXT NOT NULL DEFAULT '{}',
     chapter_label TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    updated_at TEXT NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS idx_passages_book ON saved_passages(book_id, deleted);
+  CREATE INDEX IF NOT EXISTS idx_passages_book ON saved_passages(book_id);
   CREATE TABLE IF NOT EXISTS notes (
     id TEXT PRIMARY KEY NOT NULL,
-    book_id TEXT NOT NULL,
+    book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     title TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL DEFAULT '',
+    quote TEXT,
     location TEXT NOT NULL DEFAULT '{}',
+    chapter_label TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    updated_at TEXT NOT NULL
   );
+  CREATE INDEX IF NOT EXISTS idx_notes_book ON notes(book_id);
+  CREATE TABLE IF NOT EXISTS bookmarks (
+    id TEXT PRIMARY KEY NOT NULL,
+    book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT '',
+    location TEXT NOT NULL DEFAULT '{}',
+    chapter_label TEXT,
+    progress_percent REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id);
   CREATE TABLE IF NOT EXISTS analytics_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

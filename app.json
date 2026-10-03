@@ -24,8 +24,6 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-secure-store",
-      "expo-web-browser",
       [
         "expo-splash-screen",
         {

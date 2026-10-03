@@ -16,29 +16,35 @@ import { Button } from './ui';
 
 export type CaptureDraft =
   | { kind: 'word'; cfi: string; word: string; context: string }
-  | { kind: 'passage'; cfi: string; text: string };
+  | { kind: 'passage'; cfi: string; text: string }
+  | { kind: 'note'; cfi: string; quote: string };
 
 export function CaptureSheet({
   draft,
   onCancel,
   onSaveWord,
   onSavePassage,
+  onSaveNote,
 }: {
   draft: CaptureDraft | null;
   onCancel: () => void;
   onSaveWord: (v: { word: string; meaning: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => void;
   onSavePassage: (v: { title: string }, d: Extract<CaptureDraft, { kind: 'passage' }>) => void;
+  onSaveNote: (v: { title: string; content: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => void;
 }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [word, setWord] = useState('');
   const [meaning, setMeaning] = useState('');
   const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
 
   useEffect(() => {
     if (!draft) return;
     setMeaning('');
-    if (draft.kind === 'word') setWord(draft.word);
+    setContent('');
+    if (draft.kind === 'note') setTitle('');
+    else if (draft.kind === 'word') setWord(draft.word);
     else setTitle(draft.text.split(/\s+/).slice(0, 6).join(' ').replace(/[,.;:]+$/, ''));
   }, [draft]);
 
@@ -98,6 +104,32 @@ export function CaptureSheet({
                   label="Save"
                   disabled={!title.trim()}
                   onPress={() => onSavePassage({ title: title.trim() }, draft)}
+                />
+              </ScrollView>
+            ) : draft?.kind === 'note' ? (
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
+                <Text style={[styles.heading, { color: c.text }]}>Add Note</Text>
+                {draft.quote ? (
+                  <Text style={[styles.quote, { color: c.textMuted, borderLeftColor: c.accent }]} numberOfLines={4}>
+                    “{draft.quote}”
+                  </Text>
+                ) : null}
+                <Text style={[styles.label, { color: c.textMuted }]}>Title (optional)</Text>
+                <TextInput style={input} value={title} onChangeText={setTitle} placeholder="Short title" placeholderTextColor={c.textMuted} />
+                <Text style={[styles.label, { color: c.textMuted }]}>Note</Text>
+                <TextInput
+                  style={[input, { minHeight: 96, textAlignVertical: 'top' }]}
+                  value={content}
+                  onChangeText={setContent}
+                  placeholder="What do you want to remember?"
+                  placeholderTextColor={c.textMuted}
+                  multiline
+                  autoFocus
+                />
+                <Button
+                  label="Save note"
+                  disabled={!content.trim()}
+                  onPress={() => onSaveNote({ title: title.trim(), content: content.trim() }, draft)}
                 />
               </ScrollView>
             ) : null}

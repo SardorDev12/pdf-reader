@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { deleteBookFiles } from './epub';
 import * as repo from './repo';
-import { requestSync } from './sync';
 
 export const keys = {
   books: ['books'] as const,
@@ -10,6 +9,9 @@ export const keys = {
   vocab: (bookId?: string) => ['vocab', bookId ?? 'all'] as const,
   word: (id: string) => ['word', id] as const,
   passages: (bookId?: string) => ['passages', bookId ?? 'all'] as const,
+  notes: (bookId?: string) => ['notes', bookId ?? 'all'] as const,
+  note: (id: string) => ['note', id] as const,
+  bookmarks: (bookId?: string) => ['bookmarks', bookId ?? 'all'] as const,
   search: (q: string) => ['search', q] as const,
 };
 
@@ -22,15 +24,20 @@ export const useWord = (id?: string) =>
   useQuery({ queryKey: keys.word(id ?? ''), queryFn: () => repo.getVocabulary(id!), enabled: !!id });
 export const usePassages = (bookId?: string) =>
   useQuery({ queryKey: keys.passages(bookId), queryFn: () => repo.listPassages(bookId) });
+export const useNotes = (bookId?: string) =>
+  useQuery({ queryKey: keys.notes(bookId), queryFn: () => repo.listNotes(bookId) });
+export const useNote = (id?: string) =>
+  useQuery({ queryKey: keys.note(id ?? ''), queryFn: () => repo.getNote(id!), enabled: !!id });
+export const useBookmarks = (bookId?: string) =>
+  useQuery({ queryKey: keys.bookmarks(bookId), queryFn: () => repo.listBookmarks(bookId) });
 export const useSearch = (q: string) =>
   useQuery({ queryKey: keys.search(q), queryFn: () => repo.searchAll(q), enabled: q.trim().length > 0 });
 
-/** Call after any local write: refreshes cached queries and schedules a cloud sync. */
+/** Call after any local write to refresh cached queries. */
 export function useAfterWrite() {
   const qc = useQueryClient();
   return useCallback(() => {
     qc.invalidateQueries();
-    requestSync();
   }, [qc]);
 }
 
@@ -69,4 +76,22 @@ export function useUpdateMeaning() {
     mutationFn: (v: { id: string; meaning: string }) => repo.updateVocabularyMeaning(v.id, v.meaning),
     onSuccess: after,
   });
+}
+
+export function useUpdateNote() {
+  const after = useAfterWrite();
+  return useMutation({
+    mutationFn: (v: { id: string; title: string; content: string }) => repo.updateNote(v.id, v.title, v.content),
+    onSuccess: after,
+  });
+}
+
+export function useDeleteNote() {
+  const after = useAfterWrite();
+  return useMutation({ mutationFn: repo.deleteNote, onSuccess: after });
+}
+
+export function useDeleteBookmark() {
+  const after = useAfterWrite();
+  return useMutation({ mutationFn: repo.deleteBookmark, onSuccess: after });
 }

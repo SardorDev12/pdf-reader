@@ -2,12 +2,12 @@ import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
-import { useAuth } from '@/store/auth';
+import { useApp } from '@/store/app';
 import { palette } from '@/theme';
 
 export default function Onboarding() {
   const insets = useSafeAreaInsets();
-  const complete = useAuth((s) => s.completeOnboarding);
+  const complete = useApp((s) => s.completeOnboarding);
   return (
     <View style={[styles.root, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.hero}>

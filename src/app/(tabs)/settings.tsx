@@ -1,12 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, SectionTitle } from '@/components/ui';
 import { revisitRate } from '@/lib/analytics';
-import { getSyncState, subscribeSync, syncNow, type SyncState } from '@/lib/sync';
 import { FONT_MAX, FONT_MIN, useSettings, type ReaderTheme } from '@/store/settings';
-import { isSupabaseConfigured, useAuth } from '@/store/auth';
 import { useColors } from '@/theme';
 
 const THEMES: { id: ReaderTheme; label: string; bg: string; fg: string }[] = [
@@ -18,74 +15,21 @@ const THEMES: { id: ReaderTheme; label: string; bg: string; fg: string }[] = [
 export default function Settings() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { session, guest, signOut } = useAuth();
   const { fontSize, setFontSize, readerTheme, setReaderTheme } = useSettings();
-  const [sync, setSync] = useState<SyncState>(getSyncState());
   const stats = useQuery({ queryKey: ['revisit'], queryFn: revisitRate });
-
-  useEffect(() => {
-    const off = subscribeSync(setSync);
-    return () => {
-      off();
-    };
-  }, []);
-
-  const syncLabel =
-    sync.status === 'syncing'
-      ? 'Syncing…'
-      : sync.status === 'offline'
-        ? 'Offline — will sync when you are back online'
-        : sync.status === 'error'
-          ? `Sync failed: ${sync.error}`
-          : sync.lastSyncedAt
-            ? `Last synced ${new Date(sync.lastSyncedAt).toLocaleTimeString()}`
-            : 'Not synced yet';
 
   return (
     <ScrollView contentContainerStyle={[styles.root, { paddingTop: insets.top + 8 }]}>
       <Text style={[styles.h1, { color: c.text }]}>Settings</Text>
 
       <View style={styles.section}>
-        <SectionTitle>Account</SectionTitle>
+        <SectionTitle>Storage</SectionTitle>
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          {session ? (
-            <>
-              <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>{session.user.email}</Text>
-              <Text style={{ color: c.textMuted, fontSize: 14 }}>{syncLabel}</Text>
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-                <Button label="Sync now" variant="secondary" onPress={syncNow} loading={sync.status === 'syncing'} style={{ flex: 1 }} />
-                <Button
-                  label="Sign out"
-                  variant="ghost"
-                  onPress={() =>
-                    Alert.alert('Sign out?', 'Your data stays on this device.', [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sign out', style: 'destructive', onPress: signOut },
-                    ])
-                  }
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>
-                {isSupabaseConfigured ? 'Using without an account' : 'Local only'}
-              </Text>
-              <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 20 }}>
-                {isSupabaseConfigured
-                  ? 'Your library lives on this device. Sign in to back it up and sync across devices.'
-                  : 'Cloud sync is not configured for this build. Everything is stored on this device.'}
-              </Text>
-              {isSupabaseConfigured && guest ? (
-                <Button
-                  label="Sign in to sync"
-                  onPress={() => useAuth.setState({ guest: false })}
-                  style={{ marginTop: 6 }}
-                />
-              ) : null}
-            </>
-          )}
+          <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>On this device</Text>
+          <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 20 }}>
+            Your books, words, passages, notes and bookmarks are stored locally and work fully offline. Nothing is sent
+            anywhere.
+          </Text>
         </View>
       </View>
 

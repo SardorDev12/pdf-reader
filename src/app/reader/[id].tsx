@@ -18,15 +18,17 @@ import Animated, { FadeIn, FadeOut, useSharedValue, withTiming } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CaptureSheet, type CaptureDraft } from '@/components/CaptureSheet';
 import { EDGE_WIDTH, EdgeDrawer, EdgeZone } from '@/components/EdgeDrawer';
-import { Button, IconButton } from '@/components/ui';
+import { Button, IconButton, Segmented } from '@/components/ui';
 import { track } from '@/lib/analytics';
-import { useAfterWrite, useBook, usePassages, useVocabulary } from '@/lib/hooks';
+import { useAfterWrite, useBook, useBookmarks, useNotes, usePassages, useVocabulary } from '@/lib/hooks';
 import { newId } from '@/lib/ids';
 import * as repo from '@/lib/repo';
 import { contextScript, normalizeWord } from '@/lib/readerScripts';
-import type { Location, SavedPassage, Vocabulary } from '@/lib/types';
+import type { Bookmark, Location, Note, SavedPassage, Vocabulary } from '@/lib/types';
 import { FONT_MAX, FONT_MIN, useSettings, type ReaderTheme } from '@/store/settings';
 import { palette, useColors } from '@/theme';
+
+type SavedTab = 'passages' | 'notes' | 'bookmarks';
 
 const READER_COLORS: Record<ReaderTheme, { bg: string; fg: string; link: string }> = {
   light: { bg: '#FFFFFF', fg: '#111827', link: '#2F6FED' },
@@ -74,6 +76,8 @@ function ReaderScreen() {
   const { data: book } = useBook(id);
   const { data: words = [] } = useVocabulary(id);
   const { data: passages = [] } = usePassages(id);
+  const { data: notes = [] } = useNotes(id);
+  const { data: bookmarks = [] } = useBookmarks(id);
   const { fontSize, readerTheme } = useSettings();
   const colors = READER_COLORS[readerTheme];
   const theme = useMemo(() => buildTheme(readerTheme), [readerTheme]);
@@ -109,6 +113,7 @@ function ReaderScreen() {
   const [chrome, setChrome] = useState(true);
   const [panel, setPanel] = useState<null | 'vocab' | 'saved'>(null);
   const [showDisplay, setShowDisplay] = useState(false);
+  const [savedTab, setSavedTab] = useState<SavedTab>('passages');
   const drawerWidth = Math.min(width * 0.84, 380);
   const vocabP = useSharedValue(0);
   const savedP = useSharedValue(0);
@@ -135,6 +140,8 @@ function ReaderScreen() {
   /* ------------------------------- progress ------------------------------ */
 
   const section = useRef<Section | null>(null);
+  const page = useRef<{ cfi: string; start: number; end: number; percent: number } | null>(null);
+  const [pageCfi, setPageCfi] = useState<string | null>(null);
   const [percent, setPercent] = useState(0);
   const [chapterLabel, setChapterLabel] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,6 +169,13 @@ function ReaderScreen() {
       const fraction = progress > 0 ? progress : (loc.start.percentage ?? 0);
       const pct = Math.max(0, Math.min(100, fraction * 100));
       setPercent(pct);
+      page.current = {
+        cfi: loc.start.cfi,
+        start: (loc.start.percentage ?? 0) * 100,
+        end: (loc.end?.percentage ?? loc.start.percentage ?? 0) * 100,
+        percent: pct,
+      };
+      setPageCfi(loc.start.cfi);
       pending.current = { location: { cfi: loc.start.cfi, chapterId: current?.href }, percent: pct };
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(flushProgress, 700);
@@ -205,11 +219,11 @@ function ReaderScreen() {
   );
 
   const jumpTo = useCallback(
-    (location: Location) => {
+    (location: Location, highlightIt = true) => {
       setPanel(null);
       if (!location.cfi) return;
       goToLocation(location.cfi);
-      setTimeout(() => flash(location.cfi!), 750);
+      if (highlightIt) setTimeout(() => flash(location.cfi!), 750);
     },
     [goToLocation, flash],
   );
@@ -270,6 +284,14 @@ function ReaderScreen() {
         },
       },
       {
+        key: 'note',
+        label: 'Add Note',
+        action: (cfiRange: string, text: string) => {
+          setDraft({ kind: 'note', cfi: cfiRange, quote: text.replace(/\s+/g, ' ').trim() });
+          return true;
+        },
+      },
+      {
         key: 'passage',
         label: 'Save Passage',
         action: (cfiRange: string, text: string) => {
@@ -312,9 +334,59 @@ function ReaderScreen() {
 
   const manualWord = () => {
     // "+ Add word": attach to the start of the current page
-    const cfi = pending.current?.location.cfi ?? '';
     setPanel(null);
-    setDraft({ kind: 'word', cfi, word: '', context: '' });
+    setDraft({ kind: 'word', cfi: page.current?.cfi ?? '', word: '', context: '' });
+  };
+
+  const manualNote = () => {
+    setPanel(null);
+    setDraft({ kind: 'note', cfi: page.current?.cfi ?? '', quote: '' });
+  };
+
+  const saveNote = async (v: { title: string; content: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => {
+    if (!id) return;
+    setDraft(null);
+    await repo.addNote({
+      bookId: id,
+      title: v.title,
+      content: v.content,
+      quote: d.quote || null,
+      location: { cfi: d.cfi, chapterId: section.current?.href },
+      chapterLabel: section.current?.label?.trim() || null,
+    });
+    track('note_saved', { bookId: id });
+    afterWrite();
+  };
+
+  // bookmarks currently on the visible page (exact CFI, or within the page's progress range)
+  const pageBookmarks = useMemo(() => {
+    const p = page.current;
+    if (!p) return [] as Bookmark[];
+    return bookmarks.filter(
+      (b) =>
+        b.location.cfi === p.cfi ||
+        (p.end > p.start && b.progressPercent >= p.start - 0.01 && b.progressPercent <= p.end),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookmarks, pageCfi]);
+
+  const toggleBookmark = async () => {
+    const p = page.current;
+    if (!id || !p) return;
+    if (pageBookmarks.length) {
+      await Promise.all(pageBookmarks.map((b) => repo.deleteBookmark(b.id)));
+    } else {
+      const label = section.current?.label?.trim() || null;
+      await repo.addBookmark({
+        bookId: id,
+        title: `${label ?? 'Page'} · ${Math.round(p.percent)}%`,
+        location: { cfi: p.cfi, chapterId: section.current?.href },
+        chapterLabel: label,
+        progressPercent: p.percent,
+      });
+      track('bookmark_added', { bookId: id });
+    }
+    afterWrite();
   };
 
   /* -------------------------------- render ------------------------------- */
@@ -383,7 +455,13 @@ function ReaderScreen() {
             {book.title}
           </Text>
           <IconButton name="text-outline" label="Display settings" onPress={() => setShowDisplay(true)} size={20} />
-          <IconButton name="bookmark" label="Open saved passages" onPress={() => setPanel('saved')} />
+          <IconButton
+            name={pageBookmarks.length ? 'bookmark' : 'bookmark-outline'}
+            label={pageBookmarks.length ? 'Remove bookmark from this page' : 'Bookmark this page'}
+            onPress={toggleBookmark}
+            color={pageBookmarks.length ? c.accent : undefined}
+          />
+          <IconButton name="albums-outline" label="Open saved items" onPress={() => setPanel('saved')} />
         </Animated.View>
       ) : null}
 
@@ -422,20 +500,73 @@ function ReaderScreen() {
         progress={savedP}
         open={panel === 'saved'}
         title="Saved"
-        subtitle={`${passages.length} ${passages.length === 1 ? 'passage' : 'passages'} in this book`}
+        subtitle="Passages, notes and bookmarks in this book"
         onClose={() => setPanel(null)}
+        footer={
+          savedTab === 'notes' ? (
+            <Button label="Add note" icon="add" variant="secondary" onPress={manualNote} style={styles.drawerBtn} />
+          ) : savedTab === 'bookmarks' ? (
+            <Button
+              label={pageBookmarks.length ? 'Remove bookmark here' : 'Bookmark this page'}
+              icon={pageBookmarks.length ? 'bookmark' : 'bookmark-outline'}
+              variant="secondary"
+              onPress={toggleBookmark}
+              style={styles.drawerBtn}
+            />
+          ) : null
+        }
       >
-        <PassageList
-          passages={passages}
-          onJump={(p) => {
-            track('passage_opened', { bookId: id });
-            jumpTo(p.location);
-          }}
-          onInfo={(p) => router.push({ pathname: '/passage/[id]', params: { id: p.id } })}
-        />
+        <View style={styles.drawerTabs}>
+          <Segmented
+            value={savedTab}
+            onChange={setSavedTab}
+            options={[
+              { id: 'passages', label: 'Passages', count: passages.length },
+              { id: 'notes', label: 'Notes', count: notes.length },
+              { id: 'bookmarks', label: 'Marks', count: bookmarks.length },
+            ]}
+          />
+        </View>
+        {savedTab === 'passages' ? (
+          <PassageList
+            passages={passages}
+            onJump={(p) => {
+              track('passage_opened', { bookId: id });
+              jumpTo(p.location);
+            }}
+            onInfo={(p) => router.push({ pathname: '/passage/[id]', params: { id: p.id } })}
+          />
+        ) : savedTab === 'notes' ? (
+          <NoteList
+            notes={notes}
+            onJump={(n) => {
+              track('note_opened', { bookId: id });
+              jumpTo(n.location, !!n.quote);
+            }}
+            onInfo={(n) => router.push({ pathname: '/note/[id]', params: { id: n.id } })}
+          />
+        ) : (
+          <BookmarkList
+            bookmarks={bookmarks}
+            onJump={(b) => {
+              track('bookmark_opened', { bookId: id });
+              jumpTo(b.location, false);
+            }}
+            onDelete={async (b) => {
+              await repo.deleteBookmark(b.id);
+              afterWrite();
+            }}
+          />
+        )}
       </EdgeDrawer>
 
-      <CaptureSheet draft={draft} onCancel={() => setDraft(null)} onSaveWord={saveWord} onSavePassage={savePassage} />
+      <CaptureSheet
+        draft={draft}
+        onCancel={() => setDraft(null)}
+        onSaveWord={saveWord}
+        onSavePassage={savePassage}
+        onSaveNote={saveNote}
+      />
       <DisplaySheet visible={showDisplay} onClose={() => setShowDisplay(false)} />
     </View>
   );
@@ -545,6 +676,88 @@ function PassageList({
   );
 }
 
+function NoteList({ notes, onJump, onInfo }: { notes: Note[]; onJump: (n: Note) => void; onInfo: (n: Note) => void }) {
+  const c = useColors();
+  if (!notes.length) {
+    return (
+      <Text style={[styles.hint, { color: c.textMuted }]}>
+        Select text and choose “Add Note”, or tap “Add note” below to attach a thought to this page.
+      </Text>
+    );
+  }
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(n) => n.id}
+      contentContainerStyle={{ paddingHorizontal: 20 }}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => onJump(item)}
+          style={[styles.listRow, { borderBottomColor: c.border }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Jump to note ${item.title || item.content.slice(0, 30)}`}
+        >
+          <Ionicons name="create-outline" size={18} color={c.primary} style={{ marginTop: 2 }} />
+          <View style={{ flex: 1, gap: 2 }}>
+            {item.title ? (
+              <Text style={{ color: c.text, fontSize: 16, fontWeight: '700' }} numberOfLines={1}>
+                {item.title}
+              </Text>
+            ) : null}
+            <Text style={{ color: item.title ? c.textMuted : c.text, fontSize: 14 }} numberOfLines={3}>
+              {item.content}
+            </Text>
+            {item.chapterLabel ? <Text style={{ color: c.primary, fontSize: 11 }}>{item.chapterLabel}</Text> : null}
+          </View>
+          <IconButton name="information-circle-outline" label="Note details" onPress={() => onInfo(item)} color={c.textMuted} />
+        </Pressable>
+      )}
+    />
+  );
+}
+
+function BookmarkList({
+  bookmarks,
+  onJump,
+  onDelete,
+}: {
+  bookmarks: Bookmark[];
+  onJump: (b: Bookmark) => void;
+  onDelete: (b: Bookmark) => void;
+}) {
+  const c = useColors();
+  if (!bookmarks.length) {
+    return (
+      <Text style={[styles.hint, { color: c.textMuted }]}>
+        Tap the bookmark icon in the top bar to mark the page you're on.
+      </Text>
+    );
+  }
+  return (
+    <FlatList
+      data={bookmarks}
+      keyExtractor={(b) => b.id}
+      contentContainerStyle={{ paddingHorizontal: 20 }}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => onJump(item)}
+          style={[styles.listRow, { borderBottomColor: c.border }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Jump to bookmark ${item.title}`}
+        >
+          <Ionicons name="bookmark" size={18} color={c.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: c.text, fontSize: 15, fontWeight: '600' }} numberOfLines={2}>
+              {item.title}
+            </Text>
+          </View>
+          <IconButton name="trash-outline" label={`Delete bookmark ${item.title}`} onPress={() => onDelete(item)} color={c.textMuted} size={20} />
+        </Pressable>
+      )}
+    />
+  );
+}
+
 function DisplaySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -605,6 +818,7 @@ const styles = StyleSheet.create({
   topTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '700', paddingHorizontal: 4 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
   footerText: { fontSize: 12, opacity: 0.5, maxWidth: '80%' },
+  drawerTabs: { paddingHorizontal: 20, paddingBottom: 10 },
   drawerBtn: { marginHorizontal: 20, marginTop: 8 },
   hint: { paddingHorizontal: 20, fontSize: 15, lineHeight: 22 },
   listRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },

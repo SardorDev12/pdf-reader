@@ -1,6 +1,6 @@
 import { getDb, now, parseLocation } from './db';
 import { newId } from './ids';
-import type { Book, Location, SavedPassage, Vocabulary } from './types';
+import type { Book, Bookmark, Location, Note, SavedPassage, Vocabulary } from './types';
 
 /* ------------------------------- books ---------------------------------- */
 
@@ -33,7 +33,7 @@ const mapBook = (r: BookRow): Book => ({
 const BOOK_SELECT = `
   SELECT b.*, p.progress_percent AS progress_percent
   FROM books b LEFT JOIN reading_progress p ON p.book_id = b.id
-  WHERE b.deleted = 0`;
+  WHERE 1 = 1`;
 
 export async function listBooks(): Promise<Book[]> {
   const db = await getDb();
@@ -76,14 +76,10 @@ export async function touchBook(id: string) {
   await db.runAsync('UPDATE books SET last_opened_at = ? WHERE id = ?', now(), id);
 }
 
+/** Deletes the book and (via ON DELETE CASCADE) everything captured from it. */
 export async function deleteBook(id: string) {
   const db = await getDb();
-  const t = now();
-  await db.withTransactionAsync(async () => {
-    await db.runAsync("UPDATE books SET deleted = 1, updated_at = ?, sync_status = 'pending' WHERE id = ?", t, id);
-    await db.runAsync("UPDATE vocabulary SET deleted = 1, updated_at = ?, sync_status = 'pending' WHERE book_id = ?", t, id);
-    await db.runAsync("UPDATE saved_passages SET deleted = 1, updated_at = ?, sync_status = 'pending' WHERE book_id = ?", t, id);
-  });
+  await db.runAsync('DELETE FROM books WHERE id = ?', id);
 }
 
 /* ----------------------------- progress --------------------------------- */
@@ -100,13 +96,12 @@ export async function getProgress(bookId: string): Promise<{ location: Location;
 export async function saveProgress(bookId: string, location: Location, progressPercent: number) {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO reading_progress (id, book_id, location, progress_percent, updated_at, sync_status)
-     VALUES (?, ?, ?, ?, ?, 'pending')
+    `INSERT INTO reading_progress (id, book_id, location, progress_percent, updated_at)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(book_id) DO UPDATE SET
        location = excluded.location,
        progress_percent = excluded.progress_percent,
-       updated_at = excluded.updated_at,
-       sync_status = 'pending'`,
+       updated_at = excluded.updated_at`,
     newId(),
     bookId,
     JSON.stringify(location),
@@ -144,17 +139,14 @@ const mapVocab = (r: VocabRow): Vocabulary => ({
 export async function listVocabulary(bookId?: string): Promise<Vocabulary[]> {
   const db = await getDb();
   const rows = bookId
-    ? await db.getAllAsync<VocabRow>(
-        'SELECT * FROM vocabulary WHERE deleted = 0 AND book_id = ? ORDER BY created_at DESC',
-        bookId,
-      )
-    : await db.getAllAsync<VocabRow>('SELECT * FROM vocabulary WHERE deleted = 0 ORDER BY created_at DESC');
+    ? await db.getAllAsync<VocabRow>('SELECT * FROM vocabulary WHERE book_id = ? ORDER BY created_at DESC', bookId)
+    : await db.getAllAsync<VocabRow>('SELECT * FROM vocabulary ORDER BY created_at DESC');
   return rows.map(mapVocab);
 }
 
 export async function getVocabulary(id: string): Promise<Vocabulary | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<VocabRow>('SELECT * FROM vocabulary WHERE id = ? AND deleted = 0', id);
+  const row = await db.getFirstAsync<VocabRow>('SELECT * FROM vocabulary WHERE id = ?', id);
   return row ? mapVocab(row) : null;
 }
 
@@ -187,17 +179,12 @@ export async function addVocabulary(input: {
 
 export async function updateVocabularyMeaning(id: string, meaning: string) {
   const db = await getDb();
-  await db.runAsync(
-    "UPDATE vocabulary SET meaning = ?, updated_at = ?, sync_status = 'pending' WHERE id = ?",
-    meaning.trim() || null,
-    now(),
-    id,
-  );
+  await db.runAsync('UPDATE vocabulary SET meaning = ?, updated_at = ? WHERE id = ?', meaning.trim() || null, now(), id);
 }
 
 export async function deleteVocabulary(id: string) {
   const db = await getDb();
-  await db.runAsync("UPDATE vocabulary SET deleted = 1, updated_at = ?, sync_status = 'pending' WHERE id = ?", now(), id);
+  await db.runAsync('DELETE FROM vocabulary WHERE id = ?', id);
 }
 
 /* ----------------------------- passages --------------------------------- */
@@ -227,18 +214,9 @@ const mapPassage = (r: PassageRow): SavedPassage => ({
 export async function listPassages(bookId?: string): Promise<SavedPassage[]> {
   const db = await getDb();
   const rows = bookId
-    ? await db.getAllAsync<PassageRow>(
-        'SELECT * FROM saved_passages WHERE deleted = 0 AND book_id = ? ORDER BY created_at DESC',
-        bookId,
-      )
-    : await db.getAllAsync<PassageRow>('SELECT * FROM saved_passages WHERE deleted = 0 ORDER BY created_at DESC');
+    ? await db.getAllAsync<PassageRow>('SELECT * FROM saved_passages WHERE book_id = ? ORDER BY created_at DESC', bookId)
+    : await db.getAllAsync<PassageRow>('SELECT * FROM saved_passages ORDER BY created_at DESC');
   return rows.map(mapPassage);
-}
-
-export async function getPassage(id: string): Promise<SavedPassage | null> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<PassageRow>('SELECT * FROM saved_passages WHERE id = ? AND deleted = 0', id);
-  return row ? mapPassage(row) : null;
 }
 
 export async function addPassage(input: {
@@ -247,14 +225,13 @@ export async function addPassage(input: {
   text: string;
   location: Location;
   chapterLabel?: string | null;
-}): Promise<SavedPassage> {
+}) {
   const db = await getDb();
-  const id = newId();
   const t = now();
   await db.runAsync(
     `INSERT INTO saved_passages (id, book_id, title, text, location, chapter_label, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    id,
+    newId(),
     input.bookId,
     input.title,
     input.text,
@@ -263,22 +240,150 @@ export async function addPassage(input: {
     t,
     t,
   );
-  return (await getPassage(id))!;
 }
 
 export async function renamePassage(id: string, title: string) {
   const db = await getDb();
-  await db.runAsync(
-    "UPDATE saved_passages SET title = ?, updated_at = ?, sync_status = 'pending' WHERE id = ?",
-    title,
-    now(),
-    id,
-  );
+  await db.runAsync('UPDATE saved_passages SET title = ?, updated_at = ? WHERE id = ?', title, now(), id);
 }
 
 export async function deletePassage(id: string) {
   const db = await getDb();
-  await db.runAsync("UPDATE saved_passages SET deleted = 1, updated_at = ?, sync_status = 'pending' WHERE id = ?", now(), id);
+  await db.runAsync('DELETE FROM saved_passages WHERE id = ?', id);
+}
+
+/* ------------------------------- notes ---------------------------------- */
+
+type NoteRow = {
+  id: string;
+  book_id: string;
+  title: string;
+  content: string;
+  quote: string | null;
+  location: string;
+  chapter_label: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const mapNote = (r: NoteRow): Note => ({
+  id: r.id,
+  bookId: r.book_id,
+  title: r.title,
+  content: r.content,
+  quote: r.quote,
+  location: parseLocation<Location>(r.location),
+  chapterLabel: r.chapter_label,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+export async function listNotes(bookId?: string): Promise<Note[]> {
+  const db = await getDb();
+  const rows = bookId
+    ? await db.getAllAsync<NoteRow>('SELECT * FROM notes WHERE book_id = ? ORDER BY created_at DESC', bookId)
+    : await db.getAllAsync<NoteRow>('SELECT * FROM notes ORDER BY created_at DESC');
+  return rows.map(mapNote);
+}
+
+export async function getNote(id: string): Promise<Note | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<NoteRow>('SELECT * FROM notes WHERE id = ?', id);
+  return row ? mapNote(row) : null;
+}
+
+export async function addNote(input: {
+  bookId: string;
+  title: string;
+  content: string;
+  quote?: string | null;
+  location: Location;
+  chapterLabel?: string | null;
+}) {
+  const db = await getDb();
+  const t = now();
+  await db.runAsync(
+    `INSERT INTO notes (id, book_id, title, content, quote, location, chapter_label, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    newId(),
+    input.bookId,
+    input.title,
+    input.content,
+    input.quote ?? null,
+    JSON.stringify(input.location),
+    input.chapterLabel ?? null,
+    t,
+    t,
+  );
+}
+
+export async function updateNote(id: string, title: string, content: string) {
+  const db = await getDb();
+  await db.runAsync('UPDATE notes SET title = ?, content = ?, updated_at = ? WHERE id = ?', title, content, now(), id);
+}
+
+export async function deleteNote(id: string) {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM notes WHERE id = ?', id);
+}
+
+/* ----------------------------- bookmarks -------------------------------- */
+
+type BookmarkRow = {
+  id: string;
+  book_id: string;
+  title: string;
+  location: string;
+  chapter_label: string | null;
+  progress_percent: number;
+  created_at: string;
+};
+
+const mapBookmark = (r: BookmarkRow): Bookmark => ({
+  id: r.id,
+  bookId: r.book_id,
+  title: r.title,
+  location: parseLocation<Location>(r.location),
+  chapterLabel: r.chapter_label,
+  progressPercent: r.progress_percent,
+  createdAt: r.created_at,
+});
+
+export async function listBookmarks(bookId?: string): Promise<Bookmark[]> {
+  const db = await getDb();
+  const rows = bookId
+    ? await db.getAllAsync<BookmarkRow>(
+        'SELECT * FROM bookmarks WHERE book_id = ? ORDER BY progress_percent, created_at',
+        bookId,
+      )
+    : await db.getAllAsync<BookmarkRow>('SELECT * FROM bookmarks ORDER BY created_at DESC');
+  return rows.map(mapBookmark);
+}
+
+export async function addBookmark(input: {
+  bookId: string;
+  title: string;
+  location: Location;
+  chapterLabel?: string | null;
+  progressPercent: number;
+}) {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO bookmarks (id, book_id, title, location, chapter_label, progress_percent, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    newId(),
+    input.bookId,
+    input.title,
+    JSON.stringify(input.location),
+    input.chapterLabel ?? null,
+    input.progressPercent,
+    now(),
+  );
+}
+
+export async function deleteBookmark(id: string) {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM bookmarks WHERE id = ?', id);
 }
 
 /* ------------------------------ search ---------------------------------- */
@@ -287,26 +392,50 @@ const like = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 export async function searchAll(query: string) {
   const q = query.trim();
-  if (!q) return { books: [] as Book[], vocabulary: [] as Vocabulary[], passages: [] as SavedPassage[] };
+  const empty = {
+    books: [] as Book[],
+    vocabulary: [] as Vocabulary[],
+    passages: [] as SavedPassage[],
+    notes: [] as Note[],
+    bookmarks: [] as Bookmark[],
+  };
+  if (!q) return empty;
   const db = await getDb();
   const p = like(q);
-  const [books, vocab, passages] = await Promise.all([
+  const [books, vocab, passages, notes, bookmarks] = await Promise.all([
     db.getAllAsync<BookRow>(
       `${BOOK_SELECT} AND (b.title LIKE ? ESCAPE '\\' OR b.author LIKE ? ESCAPE '\\') ORDER BY b.title`,
       p,
       p,
     ),
     db.getAllAsync<VocabRow>(
-      `SELECT * FROM vocabulary WHERE deleted = 0 AND (word LIKE ? ESCAPE '\\' OR meaning LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\') ORDER BY word`,
+      `SELECT * FROM vocabulary WHERE word LIKE ? ESCAPE '\\' OR meaning LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\' ORDER BY word`,
       p,
       p,
       p,
     ),
     db.getAllAsync<PassageRow>(
-      `SELECT * FROM saved_passages WHERE deleted = 0 AND (title LIKE ? ESCAPE '\\' OR text LIKE ? ESCAPE '\\') ORDER BY created_at DESC`,
+      `SELECT * FROM saved_passages WHERE title LIKE ? ESCAPE '\\' OR text LIKE ? ESCAPE '\\' ORDER BY created_at DESC`,
+      p,
+      p,
+    ),
+    db.getAllAsync<NoteRow>(
+      `SELECT * FROM notes WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR quote LIKE ? ESCAPE '\\' ORDER BY created_at DESC`,
+      p,
+      p,
+      p,
+    ),
+    db.getAllAsync<BookmarkRow>(
+      `SELECT * FROM bookmarks WHERE title LIKE ? ESCAPE '\\' OR chapter_label LIKE ? ESCAPE '\\' ORDER BY created_at DESC`,
       p,
       p,
     ),
   ]);
-  return { books: books.map(mapBook), vocabulary: vocab.map(mapVocab), passages: passages.map(mapPassage) };
+  return {
+    books: books.map(mapBook),
+    vocabulary: vocab.map(mapVocab),
+    passages: passages.map(mapPassage),
+    notes: notes.map(mapNote),
+    bookmarks: bookmarks.map(mapBookmark),
+  };
 }

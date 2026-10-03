@@ -125,6 +125,39 @@ export function ProgressBar({ percent }: { percent: number }) {
   );
 }
 
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string; count?: number }[];
+  value: T;
+  onChange: (id: T) => void;
+}) {
+  const c = useColors();
+  return (
+    <View style={[styles.segmented, { backgroundColor: c.surfaceAlt }]} accessibilityRole="tablist">
+      {options.map((o) => {
+        const active = o.id === value;
+        return (
+          <Pressable
+            key={o.id}
+            onPress={() => onChange(o.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[styles.segment, active && { backgroundColor: c.surface }]}
+          >
+            <Text style={{ color: active ? c.text : c.textMuted, fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
+              {o.label}
+              {o.count != null ? ` ${o.count}` : ''}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function SectionTitle({ children }: { children: ReactNode }) {
   const c = useColors();
   return <Text style={[styles.sectionTitle, { color: c.textMuted }]}>{children}</Text>;
@@ -149,5 +182,7 @@ const styles = StyleSheet.create({
   coverFallback: { borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   track: { height: 4, borderRadius: 2, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
+  segmented: { flexDirection: 'row', borderRadius: 12, padding: 3 },
+  segment: { flex: 1, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },
 });
