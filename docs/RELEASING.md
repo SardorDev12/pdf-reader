@@ -5,15 +5,16 @@ No local CLI is needed; GitHub Actions runs the EAS CLI for you.
 
 ## How it works
 
-Nothing runs automatically. Both workflows are **manual**: open the repo's **Actions** tab, pick a workflow and
-press **Run workflow**.
+| Workflow | When it runs | What it does |
+| --- | --- | --- |
+| **EAS Update (OTA)** | **Automatically on every push to `main`** (and manually from the Actions tab) | Publishes a JS/asset-only update to the `preview` and `production` update branches; installed apps pick it up on next launch |
+| **EAS Build (Android)** | Manually only (Actions tab → *Run workflow*) | Builds a store-ready `.aab` (production) or an installable `.apk` (preview) on Expo's servers; optionally submits to Google Play |
 
-| Workflow | What it does |
-| --- | --- |
-| **EAS Update (OTA)** | Publishes a JS/asset-only update to the `production` (or `preview`) update branch; installed apps pick it up on next launch |
-| **EAS Build (Android)** | Builds a store-ready `.aab` (production) or an installable `.apk` (preview) on Expo's servers; optionally submits to Google Play |
+Pushes that only change docs (`*.md`, `docs/`) or `scripts/` don't publish. A push that changes **native** code
+(a library with native code, native config in `app.json`, or the icon/splash) is **skipped on purpose**: the job
+summary says why, and you ship a new build instead. A failing type-check also stops the update.
 
-**Rule of thumb:** changed only screens/logic/images → commit to `main` and run the OTA workflow. Added or upgraded a native
+**Rule of thumb:** changed only screens/logic/images → commit to `main` (the OTA workflow runs automatically). Added or upgraded a native
 library, changed `app.json` plugins/permissions/icon/splash, or upgraded Expo → bump `version` in `app.json` and ship a
 new build (run the build workflow). OTA updates only reach installed builds whose `version` matches (`runtimeVersion` policy is
 `appVersion`), so a version bump also protects old installs from receiving JS they can't run.
@@ -47,7 +48,7 @@ Do these in order. The workflows refuse to run until steps 3 and 4 are done, whi
 2. Replace **both** occurrences of `REPLACE_WITH_EAS_PROJECT_ID`:
    - `updates.url` → `https://u.expo.dev/<PROJECT_ID>`
    - `extra.eas.projectId` → `<PROJECT_ID>`
-3. Commit to `main` (nothing runs automatically).
+3. Commit to `main`. (From now on every push to `main` publishes an OTA update automatically.)
 
 ### 5. Connect GitHub to the Expo project (expo.dev) — recommended
 
@@ -107,12 +108,11 @@ Builds made with the `production` profile listen to the `production` channel; th
 ### Ship a JS-only change (OTA)
 
 1. Commit your change to `main`.
-2. **Actions → EAS Update (OTA) → Run workflow** (branch `production`). A green run means the update is live.
+2. **Actions → EAS Update (OTA)** runs by itself. A green run means the update is live (a green run whose summary says *OTA update skipped* means the push needs a new build).
 3. Verify on expo.dev → **Updates**. On a phone, open the app and close/reopen it (the update downloads on launch and
    applies the next time the app starts), or open **Settings → App → Check for updates**.
 
-Try a change safely first: **Actions → EAS Update (OTA) → Run workflow**, branch `preview`, then test on a build made
-with the `preview` profile.
+To publish to just one channel, run **Actions → EAS Update (OTA) → Run workflow** and pick `preview` or `production`.
 
 ### Ship a new native build
 

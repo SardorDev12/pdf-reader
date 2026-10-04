@@ -1,32 +1,44 @@
 # Publishes a JavaScript-only over-the-air update with EAS Update.
-# Manual only: Actions tab > EAS Update (OTA) > Run workflow (pick "preview" or "production").
+#
+# Runs AUTOMATICALLY on every push to main, and manually from the Actions tab.
+# Publishes to both the "preview" and "production" update branches, so installed builds on either channel get it.
 # Needs the EXPO_TOKEN repository secret.
 #
-# IMPORTANT: OTA updates can only change JS/assets. If you added or upgraded a native
-# library, bump "version" in app.json and ship a new build (run EAS Build) instead.
+# Safety: OTA updates can only change JS/assets. If a push changes native code (a library with native code, native
+# config in app.json, or the icon/splash), the update is SKIPPED with a notice in the job summary - ship a new
+# build with "EAS Build (Android)" instead. A failing type-check also stops the update.
 name: EAS Update (OTA)
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'scripts/**'
+      - '.github/workflows/eas-build.yml'
   workflow_dispatch:
     inputs:
       branch:
-        description: EAS Update branch to publish to
+        description: EAS Update branch(es) to publish to
         type: choice
-        options: [production, preview]
-        default: production
+        options: [both, preview, production]
+        default: both
 
 concurrency:
-  group: eas-update-${{ inputs.branch || 'production' }}
+  group: eas-update
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     env:
-      UPDATE_BRANCH: ${{ inputs.branch || 'production' }}
+      TARGET: ${{ inputs.branch || 'both' }}
       UPDATE_MESSAGE: ${{ github.event.head_commit.message || format('Manual update from {0}', github.ref_name) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -53,5 +65,25 @@ jobs:
 
       - run: npx tsc --noEmit
 
+      - name: Native-change guard
+        id: guard
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            node scripts/check-native-change.mjs "$BEFORE"
+          else
+            echo "Manual run: skipping the native-change check."
+            echo "native=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish update
-        run: eas update --branch "$UPDATE_BRANCH" --message "$UPDATE_MESSAGE" --non-interactive
+        if: steps.guard.outputs.native != 'true'
+        run: |
+          case "$TARGET" in
+            both) BRANCHES="preview production" ;;
+            *) BRANCHES="$TARGET" ;;
+          esac
+          for b in $BRANCHES; do
+            eas update --branch "$b" --message "$UPDATE_MESSAGE" --non-interactive
+          done

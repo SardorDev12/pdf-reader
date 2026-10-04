@@ -32,7 +32,7 @@ npm run test:epub        # (needs a local Chromium)
 
 ## Releasing
 
-GitHub Actions (manual trigger only) builds the Android app and publishes OTA updates with EAS. Step-by-step platform setup (Expo,
+GitHub Actions publishes OTA updates with EAS automatically on every push to `main` (native changes are skipped), and builds the Android app when you start it manually. Step-by-step platform setup (Expo,
 GitHub, Google Play) is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Data
