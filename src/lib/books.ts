@@ -90,7 +90,11 @@ export async function pickAndImportBook(): Promise<ImportResult> {
   const dir = new Directory(Paths.document, 'books', id);
   dir.create({ intermediates: true });
   const dest = new File(dir, `book.${format}`);
-  source.copy(dest);
+  await source.copy(dest);
+  if (!dest.exists) {
+    dir.delete();
+    throw new Error('Could not copy the file into the app. Please try again.');
+  }
 
   try {
     if (format === 'pdf') {
