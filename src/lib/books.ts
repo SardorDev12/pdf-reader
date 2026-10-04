@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { track } from './analytics';
 import { newId } from './ids';
 import { insertBook } from './repo';
+import type { BookFormat } from './types';
 
 type EpubMeta = { title?: string; author?: string; cover?: { bytes: Uint8Array; ext: string } };
 
@@ -66,27 +67,38 @@ export async function readEpubMetadata(bytes: ArrayBuffer): Promise<EpubMeta> {
 
 export type ImportResult = { status: 'imported'; id: string } | { status: 'canceled' };
 
-/** Lets the user pick an .epub, stores it in app storage and registers it in the library. */
-export async function pickAndImportEpub(): Promise<ImportResult> {
+function detectFormat(name: string, mime?: string | null): BookFormat | null {
+  if (/\.pdf$/i.test(name) || mime === 'application/pdf') return 'pdf';
+  if (/\.epub$/i.test(name) || mime === 'application/epub+zip') return 'epub';
+  return null;
+}
+
+/** Lets the user pick an .epub or .pdf, stores it in app storage and registers it in the library. */
+export async function pickAndImportBook(): Promise<ImportResult> {
   const res = await DocumentPicker.getDocumentAsync({
-    type: ['application/epub+zip', 'application/octet-stream', '*/*'],
+    type: ['application/epub+zip', 'application/pdf', 'application/octet-stream', '*/*'],
     copyToCacheDirectory: true,
     multiple: false,
   });
   if (res.canceled || !res.assets?.[0]) return { status: 'canceled' };
   const asset = res.assets[0];
-  if (!/\.epub$/i.test(asset.name) && asset.mimeType !== 'application/epub+zip') {
-    throw new Error('Please choose an .epub file.');
-  }
+  const format = detectFormat(asset.name, asset.mimeType);
+  if (!format) throw new Error('Please choose an .epub or .pdf file.');
 
   const source = new File(asset.uri);
   const id = newId();
   const dir = new Directory(Paths.document, 'books', id);
   dir.create({ intermediates: true });
-  const dest = new File(dir, 'book.epub');
+  const dest = new File(dir, `book.${format}`);
   source.copy(dest);
 
   try {
+    if (format === 'pdf') {
+      // PDF title/author/cover are read from the file the first time it is opened.
+      await insertBook({ id, title: asset.name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' ').trim() || 'PDF', filePath: dest.uri, format });
+      track('book_added', { bookId: id, format });
+      return { status: 'imported', id };
+    }
     const meta = await readEpubMetadata(await dest.arrayBuffer());
     let coverPath: string | null = null;
     if (meta.cover) {
@@ -101,8 +113,9 @@ export async function pickAndImportEpub(): Promise<ImportResult> {
       author: meta.author,
       coverPath,
       filePath: dest.uri,
+      format,
     });
-    track('book_added', { bookId: id });
+    track('book_added', { bookId: id, format });
     return { status: 'imported', id };
   } catch (e) {
     dir.delete();

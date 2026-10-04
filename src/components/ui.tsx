@@ -99,19 +99,28 @@ export function EmptyState({
   );
 }
 
-export function Cover({ book, width = 96 }: { book: Pick<Book, 'title' | 'coverPath'>; width?: number }) {
+export function Cover({ book, width = 96 }: { book: Pick<Book, 'title' | 'coverPath' | 'format'>; width?: number }) {
   const c = useColors();
   const height = width * 1.45;
-  return book.coverPath ? (
-    <Image
-      source={{ uri: book.coverPath }}
-      style={{ width, height, borderRadius: 8, backgroundColor: c.surfaceAlt }}
-      contentFit="cover"
-      accessibilityLabel={`Cover of ${book.title}`}
-    />
-  ) : (
-    <View style={[styles.coverFallback, { width, height, backgroundColor: c.surfaceAlt }]}>
-      <Ionicons name="book" size={width * 0.35} color={c.primary} />
+  return (
+    <View style={{ width, height }}>
+      {book.coverPath ? (
+        <Image
+          source={{ uri: book.coverPath }}
+          style={{ width, height, borderRadius: 8, backgroundColor: c.surfaceAlt }}
+          contentFit="cover"
+          accessibilityLabel={`Cover of ${book.title}`}
+        />
+      ) : (
+        <View style={[styles.coverFallback, { width, height, backgroundColor: c.surfaceAlt }]}>
+          <Ionicons name={book.format === 'pdf' ? 'document-text' : 'book'} size={width * 0.35} color={c.primary} />
+        </View>
+      )}
+      {book.format === 'pdf' ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>PDF</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -180,6 +189,8 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
   emptyBody: { fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 10 },
   coverFallback: { borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', left: 6, bottom: 6, backgroundColor: 'rgba(14,31,92,0.88)', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   track: { height: 4, borderRadius: 2, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
   segmented: { flexDirection: 'row', borderRadius: 12, padding: 3 },

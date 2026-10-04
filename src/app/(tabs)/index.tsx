@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Cover, EmptyState, ProgressBar, SectionTitle } from '@/components/ui';
-import { pickAndImportEpub } from '@/lib/epub';
+import { pickAndImportBook } from '@/lib/books';
 import { useAfterWrite, useBooks, useDeleteBook, useSearch } from '@/lib/hooks';
 import { openInBook } from '@/lib/navigation';
 import type { Book } from '@/lib/types';
@@ -33,7 +33,7 @@ export default function Library() {
   const add = async () => {
     setImporting(true);
     try {
-      const res = await pickAndImportEpub();
+      const res = await pickAndImportBook();
       afterWrite();
       if (res.status === 'imported') open(res.id);
     } catch (e) {
@@ -148,7 +148,7 @@ export default function Library() {
         <EmptyState
           icon="library-outline"
           title="Your library is empty"
-          body="Add an EPUB from your device to start reading and capturing what matters."
+          body="Add an EPUB or PDF from your device to start reading and capturing what matters."
           action={<Button label="Add your first book" icon="add" onPress={add} loading={importing} />}
         />
       ) : (

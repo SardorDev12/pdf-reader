@@ -1,6 +1,6 @@
 import { getDb, now, parseLocation } from './db';
 import { newId } from './ids';
-import type { Book, Bookmark, Location, Note, SavedPassage, Vocabulary } from './types';
+import type { Book, BookFormat, Bookmark, Location, Note, SavedPassage, Vocabulary } from './types';
 
 /* ------------------------------- books ---------------------------------- */
 
@@ -10,7 +10,7 @@ type BookRow = {
   author: string | null;
   cover_path: string | null;
   file_path: string;
-  format: 'epub';
+  format: BookFormat;
   last_opened_at: string | null;
   created_at: string;
   updated_at: string;
@@ -55,19 +55,35 @@ export async function insertBook(input: {
   author?: string | null;
   coverPath?: string | null;
   filePath: string;
+  format: BookFormat;
 }) {
   const db = await getDb();
   const t = now();
   await db.runAsync(
     `INSERT INTO books (id, title, author, cover_path, file_path, format, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'epub', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     input.id,
     input.title,
     input.author ?? null,
     input.coverPath ?? null,
     input.filePath,
+    input.format,
     t,
     t,
+  );
+}
+
+/** Fills in details learned after import (e.g. from a PDF's own metadata / first page). */
+export async function updateBookMeta(id: string, meta: { title?: string; author?: string; coverPath?: string }) {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE books SET title = COALESCE(?, title), author = COALESCE(?, author),
+       cover_path = COALESCE(?, cover_path), updated_at = ? WHERE id = ?`,
+    meta.title ?? null,
+    meta.author ?? null,
+    meta.coverPath ?? null,
+    now(),
+    id,
   );
 }
 

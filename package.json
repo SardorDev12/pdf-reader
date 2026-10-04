@@ -36,13 +36,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "pdfjs-dist": "^3.11.174",
+    "playwright-core": "^1.63.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:pdf": "node scripts/build-pdf-viewer.mjs",
+    "test:pdf": "node scripts/test-pdf-viewer.mjs"
   },
   "private": true
 }

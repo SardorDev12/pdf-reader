@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { deleteBookFiles } from './epub';
+import { deleteBookFiles } from './books';
 import * as repo from './repo';
 
 export const keys = {

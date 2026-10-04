@@ -1,5 +1,3 @@
-import { Reader, ReaderProvider, useReader, type Location as EpubLocation, type Section, type Theme } from '@epubjs-react-native/core';
-import { useFileSystem } from '@epubjs-react-native/expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -17,56 +15,26 @@ import {
 import Animated, { FadeIn, FadeOut, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CaptureSheet, type CaptureDraft } from '@/components/CaptureSheet';
-import { EDGE_WIDTH, EdgeDrawer, EdgeZone } from '@/components/EdgeDrawer';
+import { EdgeDrawer, EdgeZone } from '@/components/EdgeDrawer';
 import { Button, IconButton, Segmented } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { useAfterWrite, useBook, useBookmarks, useNotes, usePassages, useVocabulary } from '@/lib/hooks';
-import { newId } from '@/lib/ids';
+import { normalizeWord } from '@/lib/readerScripts';
 import * as repo from '@/lib/repo';
-import { contextScript, normalizeWord } from '@/lib/readerScripts';
-import type { Bookmark, Location, Note, SavedPassage, Vocabulary } from '@/lib/types';
-import { FONT_MAX, FONT_MIN, useSettings, type ReaderTheme } from '@/store/settings';
-import { palette, useColors } from '@/theme';
+import { hasLocation, type Bookmark, type BookFormat, type Location, type Note, type SavedPassage, type Vocabulary } from '@/lib/types';
+import { READER_COLORS } from '@/reader/colors';
+import { EpubView } from '@/reader/EpubView';
+import { PdfView } from '@/reader/PdfView';
+import type { EngineSelection, PageInfo, ReaderHandle, SelectionKind } from '@/reader/types';
+import { FONT_MAX, FONT_MIN, useSettings, ZOOM_MAX, ZOOM_MIN, type ReaderTheme } from '@/store/settings';
+import { useColors } from '@/theme';
 
 type SavedTab = 'passages' | 'notes' | 'bookmarks';
 
-const READER_COLORS: Record<ReaderTheme, { bg: string; fg: string; link: string }> = {
-  light: { bg: '#FFFFFF', fg: '#111827', link: '#2F6FED' },
-  sepia: { bg: '#F4ECD8', fg: '#5B4636', link: '#9A5B1E' },
-  dark: { bg: '#16181D', fg: '#E5E7EB', link: '#8CB0FF' },
-};
+const clean = (t: string) => t.replace(/\s+/g, ' ').trim();
 
-function buildTheme(t: ReaderTheme): Theme {
-  const { bg, fg, link } = READER_COLORS[t];
-  const text = { color: `${fg} !important` };
-  return {
-    body: { background: `${bg} !important`, color: `${fg} !important` },
-    p: text,
-    span: text,
-    li: text,
-    div: text,
-    blockquote: text,
-    h1: text,
-    h2: text,
-    h3: text,
-    h4: text,
-    h5: text,
-    h6: text,
-    a: { color: `${link} !important`, 'pointer-events': 'auto', cursor: 'pointer' },
-    '::selection': { background: 'rgba(47,111,237,0.35)' },
-  };
-}
-
-export default function ReaderRoute() {
-  return (
-    <ReaderProvider>
-      <ReaderScreen />
-    </ReaderProvider>
-  );
-}
-
-function ReaderScreen() {
-  const { id, cfi: cfiParam, highlight } = useLocalSearchParams<{ id: string; cfi?: string; highlight?: string }>();
+export default function ReaderScreen() {
+  const { id, loc, highlight } = useLocalSearchParams<{ id: string; loc?: string; highlight?: string }>();
   const router = useRouter();
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -78,27 +46,24 @@ function ReaderScreen() {
   const { data: passages = [] } = usePassages(id);
   const { data: notes = [] } = useNotes(id);
   const { data: bookmarks = [] } = useBookmarks(id);
-  const { fontSize, readerTheme } = useSettings();
+  const { fontSize, pdfZoom, setPdfZoom, readerTheme } = useSettings();
   const colors = READER_COLORS[readerTheme];
-  const theme = useMemo(() => buildTheme(readerTheme), [readerTheme]);
+  const engine = useRef<ReaderHandle>(null);
 
-  const {
-    goToLocation,
-    changeTheme,
-    changeFontSize,
-    injectJavascript,
-    addAnnotation,
-    removeAnnotationByCfi,
-  } = useReader();
-
-  // initial location: explicit deep link wins over stored reading progress
-  const [initial, setInitial] = useState<{ cfi?: string } | null>(null);
+  // initial location: an explicit deep link wins over saved reading progress
+  const [initial, setInitial] = useState<{ location?: Location } | null>(null);
   useEffect(() => {
     if (!id) return;
     let alive = true;
     (async () => {
+      let deepLink: Location | undefined;
+      try {
+        deepLink = loc ? (JSON.parse(loc) as Location) : undefined;
+      } catch {
+        deepLink = undefined;
+      }
       const progress = await repo.getProgress(id);
-      if (alive) setInitial({ cfi: cfiParam || progress?.location.cfi });
+      if (alive) setInitial({ location: deepLink && hasLocation(deepLink) ? deepLink : progress?.location });
     })();
     repo.touchBook(id);
     track('book_opened', { bookId: id });
@@ -139,11 +104,8 @@ function ReaderScreen() {
 
   /* ------------------------------- progress ------------------------------ */
 
-  const section = useRef<Section | null>(null);
-  const page = useRef<{ cfi: string; start: number; end: number; percent: number } | null>(null);
-  const [pageCfi, setPageCfi] = useState<string | null>(null);
-  const [percent, setPercent] = useState(0);
-  const [chapterLabel, setChapterLabel] = useState('');
+  const [page, setPage] = useState<PageInfo | null>(null);
+  const pageRef = useRef<PageInfo | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<{ location: Location; percent: number } | null>(null);
   const milestone = useRef(-1);
@@ -161,22 +123,11 @@ function ReaderScreen() {
 
   useEffect(() => flushProgress, [flushProgress]);
 
-  const onLocationChange = useCallback(
-    (_total: number, loc: EpubLocation, progress: number, current: Section | null) => {
-      if (!loc?.start) return;
-      section.current = current;
-      setChapterLabel(current?.label?.trim() ?? '');
-      const fraction = progress > 0 ? progress : (loc.start.percentage ?? 0);
-      const pct = Math.max(0, Math.min(100, fraction * 100));
-      setPercent(pct);
-      page.current = {
-        cfi: loc.start.cfi,
-        start: (loc.start.percentage ?? 0) * 100,
-        end: (loc.end?.percentage ?? loc.start.percentage ?? 0) * 100,
-        percent: pct,
-      };
-      setPageCfi(loc.start.cfi);
-      pending.current = { location: { cfi: loc.start.cfi, chapterId: current?.href }, percent: pct };
+  const onPage = useCallback(
+    (info: PageInfo) => {
+      pageRef.current = info;
+      setPage(info);
+      pending.current = { location: info.location, percent: info.percent };
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(flushProgress, 700);
 
@@ -184,124 +135,51 @@ function ReaderScreen() {
         startedTracked.current = true;
         track('reading_started', { bookId: id });
       }
-      const step = Math.floor(pct / 10);
+      const step = Math.floor(info.percent / 10);
       if (step > milestone.current) {
         if (milestone.current >= 0) track('reading_progress', { bookId: id, percent: step * 10 });
         milestone.current = step;
-        if (pct >= 98) track('book_completed', { bookId: id });
+        if (info.percent >= 98) track('book_completed', { bookId: id });
       }
     },
     [flushProgress, id],
   );
 
-  /* ------------------------------ theme / font --------------------------- */
+  /* --------------------------------- jump -------------------------------- */
 
-  const readyRef = useRef(false);
-  useEffect(() => {
-    if (readyRef.current) changeTheme(theme);
-  }, [theme, changeTheme]);
-  useEffect(() => {
-    if (readyRef.current) changeFontSize(`${fontSize}%`);
-  }, [fontSize, changeFontSize]);
-
-  /* --------------------------- jump + highlight -------------------------- */
-
-  const flash = useCallback(
-    (cfi: string) => {
-      try {
-        addAnnotation('highlight', cfi, { temporary: true }, { color: palette.amber, opacity: 0.6 });
-        setTimeout(() => removeAnnotationByCfi(cfi), 3200);
-      } catch {
-        /* range may no longer resolve; navigation still worked */
-      }
-    },
-    [addAnnotation, removeAnnotationByCfi],
-  );
-
-  const jumpTo = useCallback(
-    (location: Location, highlightIt = true) => {
-      setPanel(null);
-      if (!location.cfi) return;
-      goToLocation(location.cfi);
-      if (highlightIt) setTimeout(() => flash(location.cfi!), 750);
-    },
-    [goToLocation, flash],
-  );
-
-  const onReady = useCallback(() => {
-    readyRef.current = true;
-    changeFontSize(`${fontSize}%`);
-    if (highlight && cfiParam) setTimeout(() => flash(cfiParam), 1100);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const jumpTo = useCallback((location: Location, highlightIt = true) => {
+    setPanel(null);
+    if (!hasLocation(location)) return;
+    engine.current?.jumpTo(location, highlightIt);
   }, []);
 
   /* -------------------------------- capture ------------------------------ */
 
   const [draft, setDraft] = useState<CaptureDraft | null>(null);
-  const contextWaiters = useRef(new Map<string, (ctx: string) => void>());
 
-  const onWebViewMessage = useCallback((msg: { type: string; id?: string; context?: string }) => {
-    if (msg.type === 'srContext' && msg.id) {
-      contextWaiters.current.get(msg.id)?.(msg.context ?? '');
-      contextWaiters.current.delete(msg.id);
+  const onSelect = useCallback((kind: SelectionKind, sel: EngineSelection) => {
+    const base = { location: sel.location, chapterLabel: sel.chapterLabel ?? null };
+    if (kind === 'word') {
+      setDraft({ kind: 'word', ...base, word: normalizeWord(sel.text), context: clean(sel.context || sel.text).slice(0, 500) });
+    } else if (kind === 'note') {
+      setDraft({ kind: 'note', ...base, quote: clean(sel.text) });
+    } else {
+      setDraft({ kind: 'passage', ...base, text: clean(sel.text) });
     }
   }, []);
 
-  const fetchContext = useCallback(
-    (cfi: string, fallback: string) =>
-      new Promise<string>((resolve) => {
-        const rid = newId();
-        const timeout = setTimeout(() => {
-          contextWaiters.current.delete(rid);
-          resolve(fallback);
-        }, 800);
-        contextWaiters.current.set(rid, (ctx) => {
-          clearTimeout(timeout);
-          resolve(ctx || fallback);
-        });
-        injectJavascript(contextScript(rid, cfi));
-      }),
-    [injectJavascript],
-  );
+  /** "+ Add" actions without a selection attach to the current page. */
+  const hereDraft = () => ({ location: pageRef.current?.location ?? {}, chapterLabel: pageRef.current?.chapterLabel || null });
 
-  const beginWord = useCallback(
-    async (cfi: string, text: string) => {
-      const word = normalizeWord(text);
-      const context = (await fetchContext(cfi, text.trim())).slice(0, 500);
-      setDraft({ kind: 'word', cfi, word, context });
-    },
-    [fetchContext],
-  );
+  const manualWord = () => {
+    setPanel(null);
+    setDraft({ kind: 'word', ...hereDraft(), word: '', context: '' });
+  };
 
-  const menuItems = useMemo(
-    () => [
-      {
-        key: 'vocab',
-        label: 'Add to Vocabulary',
-        action: (cfiRange: string, text: string) => {
-          beginWord(cfiRange, text);
-          return true;
-        },
-      },
-      {
-        key: 'note',
-        label: 'Add Note',
-        action: (cfiRange: string, text: string) => {
-          setDraft({ kind: 'note', cfi: cfiRange, quote: text.replace(/\s+/g, ' ').trim() });
-          return true;
-        },
-      },
-      {
-        key: 'passage',
-        label: 'Save Passage',
-        action: (cfiRange: string, text: string) => {
-          setDraft({ kind: 'passage', cfi: cfiRange, text: text.replace(/\s+/g, ' ').trim() });
-          return true;
-        },
-      },
-    ],
-    [beginWord],
-  );
+  const manualNote = () => {
+    setPanel(null);
+    setDraft({ kind: 'note', ...hereDraft(), quote: '' });
+  };
 
   const saveWord = async (v: { word: string; meaning: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => {
     if (!id) return;
@@ -311,8 +189,8 @@ function ReaderScreen() {
       word: v.word,
       meaning: v.meaning,
       context: d.context,
-      location: { cfi: d.cfi, chapterId: section.current?.href },
-      chapterLabel: section.current?.label?.trim() || null,
+      location: d.location,
+      chapterLabel: d.chapterLabel ?? null,
     });
     track('word_saved', { bookId: id });
     afterWrite();
@@ -325,22 +203,11 @@ function ReaderScreen() {
       bookId: id,
       title: v.title,
       text: d.text,
-      location: { cfi: d.cfi, chapterId: section.current?.href },
-      chapterLabel: section.current?.label?.trim() || null,
+      location: d.location,
+      chapterLabel: d.chapterLabel ?? null,
     });
     track('passage_saved', { bookId: id });
     afterWrite();
-  };
-
-  const manualWord = () => {
-    // "+ Add word": attach to the start of the current page
-    setPanel(null);
-    setDraft({ kind: 'word', cfi: page.current?.cfi ?? '', word: '', context: '' });
-  };
-
-  const manualNote = () => {
-    setPanel(null);
-    setDraft({ kind: 'note', cfi: page.current?.cfi ?? '', quote: '' });
   };
 
   const saveNote = async (v: { title: string; content: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => {
@@ -351,37 +218,33 @@ function ReaderScreen() {
       title: v.title,
       content: v.content,
       quote: d.quote || null,
-      location: { cfi: d.cfi, chapterId: section.current?.href },
-      chapterLabel: section.current?.label?.trim() || null,
+      location: d.location,
+      chapterLabel: d.chapterLabel ?? null,
     });
     track('note_saved', { bookId: id });
     afterWrite();
   };
 
-  // bookmarks currently on the visible page (exact CFI, or within the page's progress range)
-  const pageBookmarks = useMemo(() => {
-    const p = page.current;
-    if (!p) return [] as Bookmark[];
-    return bookmarks.filter(
-      (b) =>
-        b.location.cfi === p.cfi ||
-        (p.end > p.start && b.progressPercent >= p.start - 0.01 && b.progressPercent <= p.end),
-    );
+  /* ------------------------------- bookmarks ----------------------------- */
+
+  // bookmarks on the page that is currently visible
+  const pageBookmarks = useMemo(
+    () => (page ? bookmarks.filter(page.isBookmarked) : ([] as Bookmark[])),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookmarks, pageCfi]);
+    [bookmarks, page?.key],
+  );
 
   const toggleBookmark = async () => {
-    const p = page.current;
+    const p = pageRef.current;
     if (!id || !p) return;
     if (pageBookmarks.length) {
       await Promise.all(pageBookmarks.map((b) => repo.deleteBookmark(b.id)));
     } else {
-      const label = section.current?.label?.trim() || null;
       await repo.addBookmark({
         bookId: id,
-        title: `${label ?? 'Page'} · ${Math.round(p.percent)}%`,
-        location: { cfi: p.cfi, chapterId: section.current?.href },
-        chapterLabel: label,
+        title: p.bookmarkTitle,
+        location: p.location,
+        chapterLabel: p.chapterLabel || null,
         progressPercent: p.percent,
       });
       track('bookmark_added', { bookId: id });
@@ -405,41 +268,32 @@ function ReaderScreen() {
   }
 
   const readerHeight = height - insets.top - insets.bottom - 30;
+  const engineProps = {
+    book,
+    initialLocation: initial.location,
+    highlightOnOpen: !!highlight,
+    theme: readerTheme,
+    fontSize,
+    zoom: pdfZoom,
+    width,
+    height: readerHeight,
+    onPage,
+    onSelect,
+    onTap: () => setChrome((v) => !v),
+    onZoomChange: setPdfZoom,
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={{ paddingTop: insets.top }}>
-        <Reader
-          src={book.filePath}
-          fileSystem={useFileSystem}
-          width={width}
-          height={readerHeight}
-          initialLocation={initial.cfi}
-          defaultTheme={theme}
-          menuItems={menuItems}
-          onReady={onReady}
-          onLocationChange={onLocationChange}
-          onSingleTap={() => setChrome((v) => !v)}
-          onWebViewMessage={onWebViewMessage}
-          onDisplayError={(reason) => console.warn('EPUB display error', reason)}
-          renderLoadingFileComponent={() => (
-            <View style={[styles.center, { backgroundColor: colors.bg }]}>
-              <ActivityIndicator color={c.primary} />
-            </View>
-          )}
-          renderOpeningBookComponent={() => (
-            <View style={[styles.center, { backgroundColor: colors.bg }]}>
-              <ActivityIndicator color={c.primary} />
-            </View>
-          )}
-        />
+        {book.format === 'pdf' ? <PdfView ref={engine} {...engineProps} /> : <EpubView ref={engine} {...engineProps} />}
       </View>
 
       {/* minimal footer: progress + chapter */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 4 }]} pointerEvents="none">
         <Text style={[styles.footerText, { color: colors.fg }]} numberOfLines={1}>
-          {chapterLabel ? `${chapterLabel}  ·  ` : ''}
-          {Math.round(percent)}%
+          {page?.chapterLabel ? `${page.chapterLabel}  ·  ` : ''}
+          {Math.round(page?.percent ?? 0)}%
         </Text>
       </View>
 
@@ -485,7 +339,7 @@ function ReaderScreen() {
       >
         <VocabList
           words={words}
-          chapterId={section.current?.href}
+          chapterId={page?.chapterId}
           onJump={(w) => {
             track('vocabulary_opened', { bookId: id });
             jumpTo(w.location);
@@ -567,7 +421,7 @@ function ReaderScreen() {
         onSavePassage={savePassage}
         onSaveNote={saveNote}
       />
-      <DisplaySheet visible={showDisplay} onClose={() => setShowDisplay(false)} />
+      <DisplaySheet visible={showDisplay} format={book.format} onClose={() => setShowDisplay(false)} />
     </View>
   );
 }
@@ -758,20 +612,24 @@ function BookmarkList({
   );
 }
 
-function DisplaySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function DisplaySheet({ visible, format, onClose }: { visible: boolean; format: BookFormat; onClose: () => void }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { fontSize, setFontSize, readerTheme, setReaderTheme } = useSettings();
+  const { fontSize, setFontSize, pdfZoom, setPdfZoom, readerTheme, setReaderTheme } = useSettings();
+  const isPdf = format === 'pdf';
+  const value = isPdf ? pdfZoom : fontSize;
+  const set = isPdf ? setPdfZoom : setFontSize;
+  const [min, max, step] = isPdf ? [ZOOM_MIN, ZOOM_MAX, 15] : [FONT_MIN, FONT_MAX, 10];
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: c.overlay }]} onPress={onClose} />
       <View style={styles.sheetWrap} pointerEvents="box-none">
         <View style={[styles.displaySheet, { backgroundColor: c.surface, paddingBottom: insets.bottom + 16 }]}>
-          <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Display</Text>
+          <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{isPdf ? 'Zoom & theme' : 'Display'}</Text>
           <View style={styles.row}>
-            <Button label="A−" variant="secondary" onPress={() => setFontSize(fontSize - 10)} disabled={fontSize <= FONT_MIN} style={{ flex: 1 }} />
-            <Text style={{ color: c.text, fontWeight: '700', width: 64, textAlign: 'center' }}>{fontSize}%</Text>
-            <Button label="A+" variant="secondary" onPress={() => setFontSize(fontSize + 10)} disabled={fontSize >= FONT_MAX} style={{ flex: 1 }} />
+            <Button label={isPdf ? '−' : 'A−'} variant="secondary" onPress={() => set(value - step)} disabled={value <= min} style={{ flex: 1 }} />
+            <Text style={{ color: c.text, fontWeight: '700', width: 64, textAlign: 'center' }}>{value}%</Text>
+            <Button label={isPdf ? '+' : 'A+'} variant="secondary" onPress={() => set(value + step)} disabled={value >= max} style={{ flex: 1 }} />
           </View>
           <View style={styles.row}>
             {(Object.keys(READER_COLORS) as ReaderTheme[]).map((t) => (

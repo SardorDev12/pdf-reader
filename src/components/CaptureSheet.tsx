@@ -11,13 +11,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Location } from '@/lib/types';
 import { useColors } from '@/theme';
 import { Button } from './ui';
 
+type Where = { location: Location; chapterLabel?: string | null };
+
 export type CaptureDraft =
-  | { kind: 'word'; cfi: string; word: string; context: string }
-  | { kind: 'passage'; cfi: string; text: string }
-  | { kind: 'note'; cfi: string; quote: string };
+  | ({ kind: 'word'; word: string; context: string } & Where)
+  | ({ kind: 'passage'; text: string } & Where)
+  | ({ kind: 'note'; quote: string } & Where);
 
 export function CaptureSheet({
   draft,

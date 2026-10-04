@@ -5,7 +5,15 @@ export type Location = {
   offset?: number;
   startOffset?: number;
   endOffset?: number;
+  /** PDF: 1-based page, vertical position within it (0..1), and character offsets into the page text. */
+  page?: number;
+  y?: number;
 };
+
+export type BookFormat = 'epub' | 'pdf';
+
+/** Whether a stored location can be navigated to (EPUB CFI or PDF page). */
+export const hasLocation = (l: Location) => !!(l.cfi || l.page);
 
 export type Book = {
   id: string;
@@ -13,7 +21,7 @@ export type Book = {
   author?: string | null;
   coverPath?: string | null;
   filePath: string;
-  format: 'epub';
+  format: BookFormat;
   createdAt: string;
   updatedAt: string;
   /** joined from reading_progress */
