@@ -94,7 +94,9 @@ ok(hl.top > 0 && hl.top < hl.vh * 0.6 && hl.w > 20, 'highlight is on screen near
 const word = await page.evaluate(() => { const s = [...document.querySelectorAll('.page[data-page="25"] .textLayer span')].find((x) => x.textContent.includes('empirical')); const t = s.firstChild, i = t.data.indexOf('empirical'); const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 9); const b = r.getBoundingClientRect(); return { top: b.top, left: b.left, w: b.width }; });
 ok(Math.abs(word.top - hl.top) < 4 && Math.abs(word.left - hl.left) < 4, 'highlight overlays the exact word ' + JSON.stringify(word));
 
-const loc = (await msgs('loc')).at(-1); ok(loc.page === 25 || loc.page === 24, 'location near page 25 (got ' + loc.page + ')');
+const loc = (await msgs('loc')).at(-1);
+ok(Array.isArray(loc.visible) && loc.visible.includes(25) && loc.visible.length <= 3, 'reports the pages mostly on screen: ' + JSON.stringify(loc.visible));
+ok(loc.page === 25 || loc.page === 24, 'location near page 25 (got ' + loc.page + ')');
 
 // unrendering far pages
 ok(await page.evaluate(() => window.__pm._state.pages[0].state === 'idle' && !document.querySelector('.page[data-page="1"] canvas')), 'far page 1 unrendered (memory)');

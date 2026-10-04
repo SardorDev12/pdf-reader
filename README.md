@@ -26,7 +26,8 @@ npx expo start           # open in Expo Go / dev client on Android
 npx expo run:android     # or build a dev build locally
 npm run typecheck
 npm run build:pdf        # regenerate the bundled PDF viewer after editing src/reader/pdf/*
-npm run test:pdf         # browser regression test for the PDF viewer (needs a local Chromium)
+npm run test:pdf         # browser regression test for the PDF viewer
+npm run test:epub        # (needs a local Chromium)
 ```
 
 ## Releasing

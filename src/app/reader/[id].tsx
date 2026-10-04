@@ -104,6 +104,15 @@ export default function ReaderScreen() {
 
   /* ------------------------------- progress ------------------------------ */
 
+  // saved words on the visible page (null = the engine could not tell yet)
+  const [visibleVocab, setVisibleVocab] = useState<string[] | null>(null);
+  const vocabLocations = useMemo(() => words.map((w) => ({ id: w.id, location: w.location })), [words]);
+  const pageWords = useMemo(() => {
+    if (!visibleVocab) return words;
+    const on = new Set(visibleVocab);
+    return words.filter((w) => on.has(w.id));
+  }, [words, visibleVocab]);
+
   const [page, setPage] = useState<PageInfo | null>(null);
   const pageRef = useRef<PageInfo | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,6 +286,8 @@ export default function ReaderScreen() {
     zoom: pdfZoom,
     width,
     height: readerHeight,
+    vocab: vocabLocations,
+    onVisibleVocab: setVisibleVocab,
     onPage,
     onSelect,
     onTap: () => setChrome((v) => !v),
@@ -333,13 +344,12 @@ export default function ReaderScreen() {
         progress={vocabP}
         open={panel === 'vocab'}
         title="Vocabulary"
-        subtitle={`${words.length} ${words.length === 1 ? 'word' : 'words'} in this book`}
+        subtitle={`${pageWords.length} ${pageWords.length === 1 ? 'word' : 'words'} on this page`}
         onClose={() => setPanel(null)}
         footer={<Button label="Add word" icon="add" variant="secondary" onPress={manualWord} style={styles.drawerBtn} />}
       >
         <VocabList
-          words={words}
-          chapterId={page?.chapterId}
+          words={pageWords}
           onJump={(w) => {
             track('vocabulary_opened', { bookId: id });
             jumpTo(w.location);
@@ -428,58 +438,42 @@ export default function ReaderScreen() {
 
 function VocabList({
   words,
-  chapterId,
   onJump,
   onInfo,
 }: {
   words: Vocabulary[];
-  chapterId?: string;
   onJump: (w: Vocabulary) => void;
   onInfo: (w: Vocabulary) => void;
 }) {
   const c = useColors();
-  // words from the chapter being read come first
-  const sorted = useMemo(
-    () =>
-      [...words].sort((a, b) => {
-        const am = chapterId && a.location.chapterId === chapterId ? 0 : 1;
-        const bm = chapterId && b.location.chapterId === chapterId ? 0 : 1;
-        return am - bm || a.word.localeCompare(b.word);
-      }),
-    [words, chapterId],
-  );
-  if (!sorted.length) {
+  if (!words.length) {
     return (
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        Long-press a word in the text and choose “Add to Vocabulary”. It will show up here.
+        No saved words on this page. Long-press a word and choose “Add to Vocabulary” — it will appear here whenever you are on this page.
       </Text>
     );
   }
   return (
     <FlatList
-      data={sorted}
+      data={words}
       keyExtractor={(w) => w.id}
       contentContainerStyle={{ paddingHorizontal: 20 }}
-      renderItem={({ item }) => {
-        const here = !!chapterId && item.location.chapterId === chapterId;
-        return (
-          <Pressable
-            onPress={() => onJump(item)}
-            style={[styles.listRow, { borderBottomColor: c.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={`Jump to ${item.word}`}
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: c.text, fontSize: 17, fontWeight: '700' }}>{item.word}</Text>
-              <Text style={{ color: c.textMuted, fontSize: 13 }} numberOfLines={2}>
-                {item.meaning || item.context}
-              </Text>
-              {here ? <Text style={{ color: c.primary, fontSize: 11, fontWeight: '700' }}>THIS CHAPTER</Text> : null}
-            </View>
-            <IconButton name="information-circle-outline" label={`Details for ${item.word}`} onPress={() => onInfo(item)} color={c.textMuted} />
-          </Pressable>
-        );
-      }}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => onJump(item)}
+          style={[styles.listRow, { borderBottomColor: c.border }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Jump to ${item.word}`}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: c.text, fontSize: 17, fontWeight: '700' }}>{item.word}</Text>
+            <Text style={{ color: c.textMuted, fontSize: 13 }} numberOfLines={2}>
+              {item.meaning || item.context}
+            </Text>
+          </View>
+          <IconButton name="information-circle-outline" label={`Details for ${item.word}`} onPress={() => onInfo(item)} color={c.textMuted} />
+        </Pressable>
+      )}
     />
   );
 }

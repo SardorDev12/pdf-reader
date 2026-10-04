@@ -10,7 +10,7 @@ import { useFileSystem } from '@epubjs-react-native/expo-file-system';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { newId } from '@/lib/ids';
-import { contextScript } from '@/lib/readerScripts';
+import { contextScript, visibleScript } from '@/lib/readerScripts';
 import type { Location } from '@/lib/types';
 import type { ReaderTheme } from '@/store/settings';
 import { palette, useColors } from '@/theme';
@@ -54,6 +54,8 @@ function EpubInner({
   fontSize,
   width,
   height,
+  vocab,
+  onVisibleVocab,
   onPage,
   onSelect,
   onTap,
@@ -65,11 +67,31 @@ function EpubInner({
   const { goToLocation, changeTheme, changeFontSize, injectJavascript, addAnnotation, removeAnnotationByCfi } = useReader();
 
   // latest callbacks, so the menu items / reader handlers below can stay referentially stable
-  const cb = useRef({ onPage, onSelect });
-  cb.current = { onPage, onSelect };
+  const cb = useRef({ onPage, onSelect, onVisibleVocab });
+  cb.current = { onPage, onSelect, onVisibleVocab };
 
   const section = useRef<Section | null>(null);
   const readyRef = useRef(false);
+
+  /* ---------------------- which saved words are on this page ---------------------- */
+
+  const vocabRef = useRef(vocab);
+  vocabRef.current = vocab;
+  const visSeq = useRef('');
+  const visTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleVisible = useRef(() => {});
+  scheduleVisible.current = () => {
+    if (visTimer.current) clearTimeout(visTimer.current);
+    visTimer.current = setTimeout(() => {
+      if (!readyRef.current) return;
+      const words = vocabRef.current.filter((w) => w.location.cfi).map((w) => ({ id: w.id, cfi: w.location.cfi! }));
+      visSeq.current = newId();
+      injectJavascript(visibleScript(visSeq.current, words));
+    }, 120);
+  };
+  useEffect(() => {
+    scheduleVisible.current();
+  }, [vocab]);
 
   useEffect(() => {
     if (readyRef.current) changeTheme(epubTheme);
@@ -99,6 +121,7 @@ function EpubInner({
       isBookmarked: (b) =>
         b.location.cfi === loc.start.cfi || (end > start && b.progressPercent >= start - 0.01 && b.progressPercent <= end),
     });
+    scheduleVisible.current();
   }, []);
 
   /* --------------------------- jump + highlight --------------------------- */
@@ -138,10 +161,12 @@ function EpubInner({
 
   const contextWaiters = useRef(new Map<string, (ctx: string) => void>());
 
-  const onWebViewMessage = useCallback((msg: { type: string; id?: string; context?: string }) => {
+  const onWebViewMessage = useCallback((msg: { type: string; id?: string; context?: string; rid?: string; ids?: string[] | null }) => {
     if (msg.type === 'srContext' && msg.id) {
       contextWaiters.current.get(msg.id)?.(msg.context ?? '');
       contextWaiters.current.delete(msg.id);
+    } else if (msg.type === 'srVisible' && msg.rid === visSeq.current) {
+      cb.current.onVisibleVocab(msg.ids ?? null);
     }
   }, []);
 

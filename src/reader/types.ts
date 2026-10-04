@@ -43,6 +43,10 @@ export type ReaderViewProps = {
   zoom: number;
   width: number;
   height: number;
+  /** saved words, so the engine can tell which of them are on the visible page */
+  vocab: { id: string; location: Location }[];
+  /** ids of the saved words on the visible page, or null if the engine could not tell */
+  onVisibleVocab: (ids: string[] | null) => void;
   onPage: (info: PageInfo) => void;
   onSelect: (kind: SelectionKind, selection: EngineSelection) => void;
   onTap: () => void;

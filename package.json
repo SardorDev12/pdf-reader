@@ -46,7 +46,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "build:pdf": "node scripts/build-pdf-viewer.mjs",
-    "test:pdf": "node scripts/test-pdf-viewer.mjs"
+    "test:pdf": "node scripts/test-pdf-viewer.mjs",
+    "test:epub": "node scripts/test-epub-visible.mjs"
   },
   "private": true
 }

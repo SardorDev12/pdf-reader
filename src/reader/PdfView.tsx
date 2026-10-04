@@ -43,7 +43,7 @@ function usableTitle(t?: string) {
 }
 
 export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(
-  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, onPage, onSelect, onTap, onZoomChange },
+  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, vocab, onVisibleVocab, onPage, onSelect, onTap, onZoomChange },
   ref,
 ) {
   const c = useColors();
@@ -56,8 +56,20 @@ export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfVie
   const ready = useRef(false);
   const numPages = useRef(0);
   const outline = useRef<Outline>([]);
-  const cb = useRef({ onPage, onSelect, onTap, onZoomChange });
-  cb.current = { onPage, onSelect, onTap, onZoomChange };
+  const cb = useRef({ onPage, onSelect, onTap, onZoomChange, onVisibleVocab });
+  cb.current = { onPage, onSelect, onTap, onZoomChange, onVisibleVocab };
+
+  // saved words on the pages that are (mostly) on screen
+  const vocabRef = useRef(vocab);
+  vocabRef.current = vocab;
+  const visiblePages = useRef<number[] | null>(null);
+  const emitVisible = useCallback(() => {
+    const pages = visiblePages.current;
+    if (!pages) return;
+    const on = new Set(pages);
+    cb.current.onVisibleVocab(vocabRef.current.filter((w) => w.location.page && on.has(w.location.page)).map((w) => w.id));
+  }, []);
+  useEffect(() => emitVisible(), [vocab, emitVisible]);
 
   useEffect(() => {
     let alive = true;
@@ -157,6 +169,8 @@ export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfVie
         case 'loc': {
           const page: number = msg.page;
           const { chapter, label } = labelFor(page);
+          visiblePages.current = Array.isArray(msg.visible) && msg.visible.length ? msg.visible : [page];
+          emitVisible();
           const total = Math.max(1, numPages.current);
           const percent = msg.atEnd ? 100 : Math.max(0, Math.min(100, ((page - 1 + msg.y) / total) * 100));
           cb.current.onPage({
@@ -213,7 +227,7 @@ export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfVie
           break;
       }
     },
-    [labelFor, run, book.coverPath, book.id, afterWrite, saveCover, sendFileAsBase64],
+    [labelFor, run, book.coverPath, book.id, afterWrite, saveCover, sendFileAsBase64, emitVisible],
   );
 
   return (

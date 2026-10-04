@@ -231,11 +231,23 @@
   /* ------------------------------- location ------------------------------ */
 
   var locTimer = 0;
+  /** Pages that fill a meaningful part of the screen (>= 30% of the viewport, or >= half of the page). */
+  function visiblePages() {
+    var top = window.scrollY, bottom = top + vh(), out = [];
+    for (var i = pageTopIndex(top); i < S.pages.length; i++) {
+      var el = S.pages[i].el, t = el.offsetTop, h = el.offsetHeight;
+      if (t >= bottom) break;
+      var overlap = Math.min(bottom, t + h) - Math.max(top, t);
+      if (overlap >= 0.3 * vh() || overlap >= 0.5 * h) out.push(i + 1);
+    }
+    return out.length ? out : [curLoc().page];
+  }
+
   function reportLocation() {
     locTimer = 0;
     var l = curLoc();
     var atEnd = window.scrollY + vh() >= document.documentElement.scrollHeight - 2;
-    post({ type: 'loc', page: l.page, y: l.y, numPages: S.n, atEnd: atEnd });
+    post({ type: 'loc', page: l.page, y: l.y, numPages: S.n, atEnd: atEnd, visible: visiblePages() });
   }
   window.addEventListener('scroll', function () {
     scheduleVisible();

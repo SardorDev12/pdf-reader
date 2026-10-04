@@ -44,3 +44,30 @@ export function normalizeWord(text: string) {
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
     .replace(/\s+/g, ' ');
 }
+
+/**
+ * Asks the WebView which of the given word locations lie on the page that is currently displayed
+ * (CFI range comparison against the page's start/end). Replies with an `srVisible` message.
+ */
+export function visibleScript(requestId: string, words: { id: string; cfi: string }[]) {
+  return `
+(function () {
+  var rid = ${JSON.stringify(requestId)};
+  function send(ids) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'srVisible', rid: rid, ids: ids }));
+  }
+  try {
+    var loc = rendition.currentLocation();
+    if (!loc || !loc.start) return send(null);
+    var C = new ePub.CFI(), out = [], list = ${JSON.stringify(words)};
+    for (var i = 0; i < list.length; i++) {
+      try {
+        if (C.compare(list[i].cfi, loc.start.cfi) >= 0 && C.compare(list[i].cfi, loc.end.cfi) <= 0) out.push(list[i].id);
+      } catch (e) { /* unresolvable CFI: not on this page */ }
+    }
+    send(out);
+  } catch (err) { send(null); }
+})();
+true;
+`;
+}
