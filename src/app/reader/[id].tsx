@@ -104,14 +104,18 @@ export default function ReaderScreen() {
 
   /* ------------------------------- progress ------------------------------ */
 
-  // saved words on the visible page (null = the engine could not tell yet)
-  const [visibleVocab, setVisibleVocab] = useState<string[] | null>(null);
-  const vocabLocations = useMemo(() => words.map((w) => ({ id: w.id, location: w.location })), [words]);
-  const pageWords = useMemo(() => {
-    if (!visibleVocab) return words;
-    const on = new Set(visibleVocab);
-    return words.filter((w) => on.has(w.id));
-  }, [words, visibleVocab]);
+  // Everything saved is attached to the page it came from. The engine tells us which saved items are on the
+  // visible page (null = it could not tell yet, so show everything rather than nothing).
+  const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
+  const allItems = useMemo(
+    () => [...words, ...passages, ...notes, ...bookmarks].map((i) => ({ id: i.id, location: i.location })),
+    [words, passages, notes, bookmarks],
+  );
+  const onPageSet = useMemo(() => (visibleIds ? new Set(visibleIds) : null), [visibleIds]);
+  const here = useCallback(<T extends { id: string }>(list: T[]) => (onPageSet ? list.filter((x) => onPageSet.has(x.id)) : list), [onPageSet]);
+  const pageWords = useMemo(() => here(words), [here, words]);
+  const pagePassages = useMemo(() => here(passages), [here, passages]);
+  const pageNotes = useMemo(() => here(notes), [here, notes]);
 
   const [page, setPage] = useState<PageInfo | null>(null);
   const pageRef = useRef<PageInfo | null>(null);
@@ -286,8 +290,8 @@ export default function ReaderScreen() {
     zoom: pdfZoom,
     width,
     height: readerHeight,
-    vocab: vocabLocations,
-    onVisibleVocab: setVisibleVocab,
+    items: allItems,
+    onVisibleItems: setVisibleIds,
     onPage,
     onSelect,
     onTap: () => setChrome((v) => !v),
@@ -364,7 +368,7 @@ export default function ReaderScreen() {
         progress={savedP}
         open={panel === 'saved'}
         title="Saved"
-        subtitle="Passages, notes and bookmarks in this book"
+        subtitle="Saved on this page"
         onClose={() => setPanel(null)}
         footer={
           savedTab === 'notes' ? (
@@ -385,15 +389,15 @@ export default function ReaderScreen() {
             value={savedTab}
             onChange={setSavedTab}
             options={[
-              { id: 'passages', label: 'Passages', count: passages.length },
-              { id: 'notes', label: 'Notes', count: notes.length },
-              { id: 'bookmarks', label: 'Marks', count: bookmarks.length },
+              { id: 'passages', label: 'Passages', count: pagePassages.length },
+              { id: 'notes', label: 'Notes', count: pageNotes.length },
+              { id: 'bookmarks', label: 'Marks', count: pageBookmarks.length },
             ]}
           />
         </View>
         {savedTab === 'passages' ? (
           <PassageList
-            passages={passages}
+            passages={pagePassages}
             onJump={(p) => {
               track('passage_opened', { bookId: id });
               jumpTo(p.location);
@@ -402,7 +406,7 @@ export default function ReaderScreen() {
           />
         ) : savedTab === 'notes' ? (
           <NoteList
-            notes={notes}
+            notes={pageNotes}
             onJump={(n) => {
               track('note_opened', { bookId: id });
               jumpTo(n.location, !!n.quote);
@@ -411,7 +415,7 @@ export default function ReaderScreen() {
           />
         ) : (
           <BookmarkList
-            bookmarks={bookmarks}
+            bookmarks={pageBookmarks}
             onJump={(b) => {
               track('bookmark_opened', { bookId: id });
               jumpTo(b.location, false);
@@ -491,7 +495,7 @@ function PassageList({
   if (!passages.length) {
     return (
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        Select a few lines and choose “Save Passage”. Tap one here to jump straight back to it.
+        No saved passages on this page. Select a few lines and choose “Save Passage” — it will appear here whenever you are on this page.
       </Text>
     );
   }
@@ -529,7 +533,7 @@ function NoteList({ notes, onJump, onInfo }: { notes: Note[]; onJump: (n: Note) 
   if (!notes.length) {
     return (
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        Select text and choose “Add Note”, or tap “Add note” below to attach a thought to this page.
+        No notes on this page. Select text and choose “Add Note”, or tap “Add note” below to attach a thought to this page.
       </Text>
     );
   }
@@ -577,7 +581,7 @@ function BookmarkList({
   if (!bookmarks.length) {
     return (
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        Tap the bookmark icon in the top bar to mark the page you're on.
+        This page isn't bookmarked. Tap the bookmark icon in the top bar to mark it.
       </Text>
     );
   }

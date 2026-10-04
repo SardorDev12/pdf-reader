@@ -54,8 +54,8 @@ function EpubInner({
   fontSize,
   width,
   height,
-  vocab,
-  onVisibleVocab,
+  items,
+  onVisibleItems,
   onPage,
   onSelect,
   onTap,
@@ -67,16 +67,16 @@ function EpubInner({
   const { goToLocation, changeTheme, changeFontSize, injectJavascript, addAnnotation, removeAnnotationByCfi } = useReader();
 
   // latest callbacks, so the menu items / reader handlers below can stay referentially stable
-  const cb = useRef({ onPage, onSelect, onVisibleVocab });
-  cb.current = { onPage, onSelect, onVisibleVocab };
+  const cb = useRef({ onPage, onSelect, onVisibleItems });
+  cb.current = { onPage, onSelect, onVisibleItems };
 
   const section = useRef<Section | null>(null);
   const readyRef = useRef(false);
 
-  /* ---------------------- which saved words are on this page ---------------------- */
+  /* --------------------- which saved items are on this page --------------------- */
 
-  const vocabRef = useRef(vocab);
-  vocabRef.current = vocab;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const visSeq = useRef('');
   const visTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleVisible = useRef(() => {});
@@ -84,14 +84,14 @@ function EpubInner({
     if (visTimer.current) clearTimeout(visTimer.current);
     visTimer.current = setTimeout(() => {
       if (!readyRef.current) return;
-      const words = vocabRef.current.filter((w) => w.location.cfi).map((w) => ({ id: w.id, cfi: w.location.cfi! }));
+      const list = itemsRef.current.filter((w) => w.location.cfi).map((w) => ({ id: w.id, cfi: w.location.cfi! }));
       visSeq.current = newId();
-      injectJavascript(visibleScript(visSeq.current, words));
+      injectJavascript(visibleScript(visSeq.current, list));
     }, 120);
   };
   useEffect(() => {
     scheduleVisible.current();
-  }, [vocab]);
+  }, [items]);
 
   useEffect(() => {
     if (readyRef.current) changeTheme(epubTheme);
@@ -166,7 +166,7 @@ function EpubInner({
       contextWaiters.current.get(msg.id)?.(msg.context ?? '');
       contextWaiters.current.delete(msg.id);
     } else if (msg.type === 'srVisible' && msg.rid === visSeq.current) {
-      cb.current.onVisibleVocab(msg.ids ?? null);
+      cb.current.onVisibleItems(msg.ids ?? null);
     }
   }, []);
 

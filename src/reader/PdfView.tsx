@@ -43,7 +43,7 @@ function usableTitle(t?: string) {
 }
 
 export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(
-  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, vocab, onVisibleVocab, onPage, onSelect, onTap, onZoomChange },
+  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, items, onVisibleItems, onPage, onSelect, onTap, onZoomChange },
   ref,
 ) {
   const c = useColors();
@@ -56,20 +56,20 @@ export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfVie
   const ready = useRef(false);
   const numPages = useRef(0);
   const outline = useRef<Outline>([]);
-  const cb = useRef({ onPage, onSelect, onTap, onZoomChange, onVisibleVocab });
-  cb.current = { onPage, onSelect, onTap, onZoomChange, onVisibleVocab };
+  const cb = useRef({ onPage, onSelect, onTap, onZoomChange, onVisibleItems });
+  cb.current = { onPage, onSelect, onTap, onZoomChange, onVisibleItems };
 
-  // saved words on the pages that are (mostly) on screen
-  const vocabRef = useRef(vocab);
-  vocabRef.current = vocab;
+  // saved items on the pages that are (mostly) on screen
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const visiblePages = useRef<number[] | null>(null);
   const emitVisible = useCallback(() => {
     const pages = visiblePages.current;
     if (!pages) return;
     const on = new Set(pages);
-    cb.current.onVisibleVocab(vocabRef.current.filter((w) => w.location.page && on.has(w.location.page)).map((w) => w.id));
+    cb.current.onVisibleItems(itemsRef.current.filter((w) => w.location.page && on.has(w.location.page)).map((w) => w.id));
   }, []);
-  useEffect(() => emitVisible(), [vocab, emitVisible]);
+  useEffect(() => emitVisible(), [items, emitVisible]);
 
   useEffect(() => {
     let alive = true;

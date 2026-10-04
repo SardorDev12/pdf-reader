@@ -38,24 +38,33 @@ const words = await page.evaluate(async (b64) => {
   await window.rendition.display();
   const contents = window.rendition.getContents()[0], doc = contents.document;
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-  window.__ranges = []; const out = []; let n, k = 0;
+  window.__ranges = []; const out = []; const all = []; let n, k = 0;
   while ((n = walker.nextNode())) {
     const re = /w\d{4}/g; let m;
     while ((m = re.exec(n.data))) {
+      all.push({ node: n, at: m.index });
       if (k++ % 5 === 0) {
         const r = doc.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + 5);
         window.__ranges.push(r); out.push({ id: m[0], cfi: contents.cfiFromRange(r) });
       }
     }
   }
+  // a saved passage that starts on the last line of page 1 and ends on the first line of page 2
+  const delta = window.rendition.manager.layout.delta;
+  const pageOf = (t) => { const r = doc.createRange(); r.setStart(t.node, t.at); r.setEnd(t.node, t.at + 5); return Math.floor(r.getBoundingClientRect().left / delta); };
+  const lastOnP1 = [...all].reverse().find((t) => pageOf(t) === 0), firstOnP2 = all.find((t) => pageOf(t) === 1);
+  const span = doc.createRange(); span.setStart(lastOnP1.node, lastOnP1.at); span.setEnd(firstOnP2.node, firstOnP2.at + 5);
+  out.push({ id: 'SPAN', cfi: contents.cfiFromRange(span) });
   return out;
 }, b64);
 
 let failed = 0;
 const ok = (c, label) => { console.log(c ? 'PASS' : 'FAIL', label); if (!c) failed++; };
-ok(words.length > 100, `collected ${words.length} word CFIs`);
+ok(words.length > 100, `collected ${words.length} item CFIs (incl. a passage crossing the page 1/2 break)`);
+const spanCfi = words.find((w) => w.id === 'SPAN').cfi;
+ok(/^epubcfi\(.*,.*,.*\)$/.test(spanCfi), 'the straddling passage is a range CFI: ' + spanCfi);
 
-let chapter1Pages = 0, chapter2Pages = 0, seenPartial = false;
+let chapter1Pages = 0, chapter2Pages = 0;
 for (let i = 0; i < 40; i++) {
   const here = await page.evaluate(() => {
     const loc = window.rendition.currentLocation();
@@ -74,9 +83,10 @@ for (let i = 0; i < 40; i++) {
       return window.__ranges.map((r) => { const b = r.getBoundingClientRect(); return { id: r.toString(), full: b.left + f.left >= c.left - 1 && b.right + f.left <= c.right + 1, any: b.right + f.left > c.left + 1 && b.left + f.left < c.right - 1 }; });
     });
     const full = truth.filter((t) => t.full).map((t) => t.id), any = truth.filter((t) => t.any).map((t) => t.id);
-    const missing = full.filter((id) => !ids.includes(id)), extra = ids.filter((id) => !any.includes(id));
-    ok(ids.length > 0 && ids.length < words.length && !missing.length && !extra.length, `chapter 1 page ${chapter1Pages}: ${ids.length} words, matches the screen`);
-    if (ids.length && ids.length < 28) seenPartial = true;
+    const missing = full.filter((id) => !ids.includes(id));
+    const real = ids.filter((id) => id !== 'SPAN');
+    ok(real.length > 0 && !missing.length && real.every((id) => any.includes(id)), `chapter 1 page ${chapter1Pages}: ${real.length} words, matches the screen`);
+    ok(ids.includes('SPAN') === (chapter1Pages <= 2), `chapter 1 page ${chapter1Pages}: straddling passage ${ids.includes('SPAN') ? 'shown' : 'hidden'} (expected ${chapter1Pages <= 2 ? 'shown' : 'hidden'})`);
   } else {
     chapter2Pages++;
     ok(Array.isArray(ids) && ids.length === 0, `chapter 2 page ${chapter2Pages}: no chapter-1 words (${ids && ids.length})`);
