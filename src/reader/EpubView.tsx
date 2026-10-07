@@ -10,7 +10,8 @@ import { useFileSystem } from '@epubjs-react-native/expo-file-system';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { newId } from '@/lib/ids';
-import { contextScript, visibleScript } from '@/lib/readerScripts';
+import { cfiOnPage } from '@/lib/cfi';
+import { contextScript } from '@/lib/readerScripts';
 import type { Location } from '@/lib/types';
 import type { ReaderTheme } from '@/store/settings';
 import { palette, useColors } from '@/theme';
@@ -75,23 +76,19 @@ function EpubInner({
 
   /* --------------------- which saved items are on this page --------------------- */
 
+  // The page's CFI range comes with every location change; saved items are matched against it right here.
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const visSeq = useRef('');
-  const visTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleVisible = useRef(() => {});
-  scheduleVisible.current = () => {
-    if (visTimer.current) clearTimeout(visTimer.current);
-    visTimer.current = setTimeout(() => {
-      if (!readyRef.current) return;
-      const list = itemsRef.current.filter((w) => w.location.cfi).map((w) => ({ id: w.id, cfi: w.location.cfi! }));
-      visSeq.current = newId();
-      injectJavascript(visibleScript(visSeq.current, list));
-    }, 120);
-  };
-  useEffect(() => {
-    scheduleVisible.current();
-  }, [items]);
+  const pageRange = useRef<{ start: string; end: string } | null>(null);
+  const publishVisible = useCallback(() => {
+    const range = pageRange.current;
+    if (!range) return;
+    const ids = itemsRef.current
+      .filter((i) => i.location.cfi && cfiOnPage(i.location.cfi, range.start, range.end))
+      .map((i) => i.id);
+    cb.current.onVisibleItems(ids);
+  }, []);
+  useEffect(() => publishVisible(), [items, publishVisible]);
 
   useEffect(() => {
     if (readyRef.current) changeTheme(epubTheme);
@@ -105,7 +102,8 @@ function EpubInner({
   const onLocationChange = useCallback((_total: number, loc: EpubLocation, progress: number, current: Section | null) => {
     if (!loc?.start) return;
     section.current = current;
-    const fraction = progress > 0 ? progress : (loc.start.percentage ?? 0);
+    // `progress` from the reader is already a whole-number percent; start.percentage is the precise 0..1 value
+    const fraction = loc.start.percentage ?? progress / 100;
     const pct = Math.max(0, Math.min(100, fraction * 100));
     const start = (loc.start.percentage ?? 0) * 100;
     const end = (loc.end?.percentage ?? loc.start.percentage ?? 0) * 100;
@@ -121,8 +119,9 @@ function EpubInner({
       isBookmarked: (b) =>
         b.location.cfi === loc.start.cfi || (end > start && b.progressPercent >= start - 0.01 && b.progressPercent <= end),
     });
-    scheduleVisible.current();
-  }, []);
+    pageRange.current = { start: loc.start.cfi, end: loc.end?.cfi ?? loc.start.cfi };
+    publishVisible();
+  }, [publishVisible]);
 
   /* --------------------------- jump + highlight --------------------------- */
 
@@ -161,12 +160,10 @@ function EpubInner({
 
   const contextWaiters = useRef(new Map<string, (ctx: string) => void>());
 
-  const onWebViewMessage = useCallback((msg: { type: string; id?: string; context?: string; rid?: string; ids?: string[] | null }) => {
+  const onWebViewMessage = useCallback((msg: { type: string; id?: string; context?: string }) => {
     if (msg.type === 'srContext' && msg.id) {
       contextWaiters.current.get(msg.id)?.(msg.context ?? '');
       contextWaiters.current.delete(msg.id);
-    } else if (msg.type === 'srVisible' && msg.rid === visSeq.current) {
-      cb.current.onVisibleItems(msg.ids ?? null);
     }
   }, []);
 

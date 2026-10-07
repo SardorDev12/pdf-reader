@@ -104,15 +104,15 @@ export default function ReaderScreen() {
 
   /* ------------------------------- progress ------------------------------ */
 
-  // Everything saved is attached to the page it came from. The engine tells us which saved items are on the
-  // visible page (null = it could not tell yet, so show everything rather than nothing).
-  const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
+  // Everything saved is attached to the page it came from: the engine reports which saved items are on the
+  // visible page and the drawers show only those (the Vocabulary / Saved tabs list everything).
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const allItems = useMemo(
     () => [...words, ...passages, ...notes, ...bookmarks].map((i) => ({ id: i.id, location: i.location })),
     [words, passages, notes, bookmarks],
   );
-  const onPageSet = useMemo(() => (visibleIds ? new Set(visibleIds) : null), [visibleIds]);
-  const here = useCallback(<T extends { id: string }>(list: T[]) => (onPageSet ? list.filter((x) => onPageSet.has(x.id)) : list), [onPageSet]);
+  const onPageSet = useMemo(() => new Set(visibleIds), [visibleIds]);
+  const here = useCallback(<T extends { id: string }>(list: T[]) => list.filter((x) => onPageSet.has(x.id)), [onPageSet]);
   const pageWords = useMemo(() => here(words), [here, words]);
   const pagePassages = useMemo(() => here(passages), [here, passages]);
   const pageNotes = useMemo(() => here(notes), [here, notes]);

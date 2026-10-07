@@ -45,8 +45,8 @@ export type ReaderViewProps = {
   height: number;
   /** every saved item (word, passage, note, bookmark), so the engine can tell which are on the visible page */
   items: { id: string; location: Location }[];
-  /** ids of the saved items on the visible page, or null if the engine could not tell */
-  onVisibleItems: (ids: string[] | null) => void;
+  /** ids of the saved items on the visible page; called on every page change and whenever the saved items change */
+  onVisibleItems: (ids: string[]) => void;
   onPage: (info: PageInfo) => void;
   onSelect: (kind: SelectionKind, selection: EngineSelection) => void;
   onTap: () => void;
