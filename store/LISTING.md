@@ -33,8 +33,8 @@ Import books from your device's files. Pagemark doesn't include or sell books; i
 ```
 
 **Graphics** (in this folder):
-- App icon: `icon-512.png` (512 × 512)
-- Feature graphic: `feature-graphic-1024x500.png` (1024 × 500)
+- App icon: `icon-1024.png` (Play's crop tool wants an image *larger* than 512 × 512 – it scales it down; `icon-512.png` is the exact size if it accepts that)
+- Feature graphic: `feature-graphic-2048x1000.png` (Play's crop tool wants an image *larger* than 1024 × 500 with the same proportions; `feature-graphic-1024x500.png` is the exact size)
 - Phone screenshots: take 4–8 on your phone (see the guide)
 
 ## Other forms
