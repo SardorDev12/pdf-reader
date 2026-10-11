@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
-      "package": "com.pagemark.app",
+      "package": "uz.pagemark.app",
       "adaptiveIcon": {
         "backgroundColor": "#0E1F5C",
         "foregroundImage": "./assets/android-icon-foreground.png",

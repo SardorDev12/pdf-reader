@@ -64,7 +64,7 @@ started from the dashboard, where Expo generates and stores the keystore for you
 2. Platform **Android**, profile **production**, branch `main`.
 3. When asked about credentials, choose to let Expo **generate a new keystore**.
 4. Wait for it to finish. Afterwards confirm under Project → **Credentials → Android** that a keystore exists for
-   `com.pagemark.app`. All later builds (including from GitHub Actions) reuse it.
+   `uz.pagemark.app`. All later builds (including from GitHub Actions) reuse it.
 
 > I couldn't open the Expo docs from my environment to double-check the exact button names on the dashboard, so the
 > labels above may differ slightly. If you can't find a way to generate the keystore in the dashboard, tell me what
@@ -85,7 +85,7 @@ Builds made with the `production` profile listen to the `production` channel; th
    **Create app** → name *Pagemark*, default language, app/free, accept declarations.
    Complete the dashboard tasks (privacy policy URL, content rating, data safety, target audience). The app stores
    everything locally and collects no data, which you declare in **Data safety**.
-2. Use package name **`com.pagemark.app`** (it's baked into the build; Play ties the app to it permanently, so
+2. Use package name **`uz.pagemark.app`** (it's baked into the build; Play ties the app to it permanently, so
    change it in `app.json` *before* your first upload if you want a different one).
 3. **First upload must be manual.** On expo.dev open the finished production build → download the `.aab` →
    Play Console → **Testing → Internal testing → Create new release → upload the `.aab`** → add testers → roll out.
