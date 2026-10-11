@@ -1,0 +1,33 @@
+# Read-only diagnostic: shows which signing certificate each finished Android build in this Expo project used.
+# It starts NO build and uses no build quota. Manual only: Actions tab > Show signing certificates > Run workflow.
+name: Show signing certificates
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected:
+        description: SHA-1 Google Play expects (to highlight a match)
+        default: 'EB:1B:DA:94:72:BF:E8:17:9D:1C:6C:25:6E:DE:DF:56:55:26:9D:C8'
+      limit:
+        description: How many recent builds to inspect
+        default: '20'
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      - name: Read certificates
+        env:
+          EXPECTED: ${{ inputs.expected }}
+          LIMIT: ${{ inputs.limit }}
+        run: node scripts/signing-info.mjs "$EXPECTED" "$LIMIT"

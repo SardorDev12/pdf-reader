@@ -139,3 +139,4 @@ your phone and install the APK. Preview builds receive updates from the `preview
 | *Slug mismatch* / project not found | Project slug on expo.dev must be `pagemark`, and the token's account must own it. |
 | Update published but the phone doesn't get it | The installed build's `version` must equal `app.json`'s `version` at publish time; the build's channel must be linked to the branch (step 7); updates apply on the **second** launch. Dev builds and Expo Go never receive updates. |
 | App crashes right after an OTA | You shipped JS that needs a native change. Bump `version`, ship a new build, and re-publish. |
+| Play says the bundle "is signed with the wrong key" | Play already has a different upload key on record for this app. Run **Actions → Show signing certificates** (read-only, starts no build): it lists the certificate of every past build and prints the PEM you need for Play's *Request upload key reset*. |
