@@ -16,6 +16,7 @@ on:
       - '**.md'
       - 'docs/**'
       - 'scripts/**'
+      - 'store/**'
       - '.github/workflows/eas-build.yml'
   workflow_dispatch:
     inputs:
