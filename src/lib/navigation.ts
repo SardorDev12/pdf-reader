@@ -8,6 +8,8 @@ export function openInBook(
   bookId: string,
   location: Location,
   kind: 'word' | 'passage' | 'note' | 'bookmark',
+  /** briefly flash the spot: only for items without a permanent highlight */
+  flash = false,
 ) {
   track(`${kind === 'word' ? 'vocabulary' : kind}_opened` as const, { bookId });
   const has = hasLocation(location);
@@ -16,8 +18,7 @@ export function openInBook(
     params: {
       id: bookId,
       loc: has ? JSON.stringify(location) : '',
-      // bookmarks just go there; everything else flashes the captured text
-      highlight: has && kind !== 'bookmark' ? '1' : '',
+      highlight: has && flash ? '1' : '',
     },
   });
 }

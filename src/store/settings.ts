@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { DEFAULT_HIGHLIGHT } from '@/lib/highlight';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
@@ -11,6 +12,9 @@ type SettingsState = {
   /** PDF zoom in percent, 100 = fit to width */
   pdfZoom: number;
   setPdfZoom: (n: number) => void;
+  /** the colour used for the next saved word / passage / note */
+  highlightColor: string;
+  setHighlightColor: (c: string) => void;
   setFontSize: (n: number) => void;
   setReaderTheme: (t: ReaderTheme) => void;
 };
@@ -26,6 +30,8 @@ export const useSettings = create<SettingsState>()(
       fontSize: 110,
       readerTheme: 'light',
       pdfZoom: 100,
+      highlightColor: DEFAULT_HIGHLIGHT,
+      setHighlightColor: (highlightColor) => set({ highlightColor }),
       setPdfZoom: (n) => set({ pdfZoom: Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(n))) }),
       setFontSize: (n) => set({ fontSize: Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n))) }),
       setReaderTheme: (readerTheme) => set({ readerTheme }),

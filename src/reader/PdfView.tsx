@@ -43,7 +43,7 @@ function usableTitle(t?: string) {
 }
 
 export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(
-  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, items, onVisibleItems, onPage, onSelect, onTap, onZoomChange },
+  { book, initialLocation, highlightOnOpen, theme, zoom, width, height, highlights, items, onVisibleItems, onPage, onSelect, onTap, onZoomChange },
   ref,
 ) {
   const c = useColors();
@@ -101,6 +101,15 @@ export const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfVie
   }, [viewerUri]);
 
   const run = useCallback((js: string) => web.current?.injectJavaScript(`${js};true;`), []);
+
+  // permanent highlights of saved items
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const list = highlights
+      .filter((h) => h.location.page && h.location.startOffset != null && h.location.endOffset != null)
+      .map((h) => ({ id: h.id, color: h.color, location: { page: h.location.page, startOffset: h.location.startOffset, endOffset: h.location.endOffset } }));
+    run(`window.__pm.setHighlights(${JSON.stringify(list)})`);
+  }, [status, highlights, run]);
 
   useEffect(() => {
     if (ready.current) run(`window.__pm.setTheme(${JSON.stringify(theme)})`);

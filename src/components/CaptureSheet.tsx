@@ -13,7 +13,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Location } from '@/lib/types';
 import { useColors } from '@/theme';
-import { Button } from './ui';
+import { useSettings } from '@/store/settings';
+import { Button, ColorPicker } from './ui';
 
 type Where = { location: Location; chapterLabel?: string | null };
 
@@ -31,9 +32,9 @@ export function CaptureSheet({
 }: {
   draft: CaptureDraft | null;
   onCancel: () => void;
-  onSaveWord: (v: { word: string; meaning: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => void;
-  onSavePassage: (v: { title: string }, d: Extract<CaptureDraft, { kind: 'passage' }>) => void;
-  onSaveNote: (v: { title: string; content: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => void;
+  onSaveWord: (v: { word: string; meaning: string; color: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => void;
+  onSavePassage: (v: { title: string; color: string }, d: Extract<CaptureDraft, { kind: 'passage' }>) => void;
+  onSaveNote: (v: { title: string; content: string; color: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => void;
 }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -41,14 +42,19 @@ export function CaptureSheet({
   const [meaning, setMeaning] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  // the colour used last time is pre-selected
+  const lastColor = useSettings((st) => st.highlightColor);
+  const [color, setColor] = useState(lastColor);
 
   useEffect(() => {
     if (!draft) return;
+    setColor(lastColor);
     setMeaning('');
     setContent('');
     if (draft.kind === 'note') setTitle('');
     else if (draft.kind === 'word') setWord(draft.word);
     else setTitle(draft.text.split(/\s+/).slice(0, 6).join(' ').replace(/[,.;:]+$/, ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
   const input = [styles.input, { backgroundColor: c.bg, borderColor: c.border, color: c.text }];
@@ -82,10 +88,12 @@ export function CaptureSheet({
                     </Text>
                   </>
                 ) : null}
+                <Text style={[styles.label, { color: c.textMuted }]}>Highlight</Text>
+                <ColorPicker value={color} onChange={setColor} />
                 <Button
                   label="Save word"
                   disabled={!word.trim()}
-                  onPress={() => onSaveWord({ word: word.trim(), meaning }, draft)}
+                  onPress={() => onSaveWord({ word: word.trim(), meaning, color }, draft)}
                 />
               </ScrollView>
             ) : draft?.kind === 'passage' ? (
@@ -103,10 +111,12 @@ export function CaptureSheet({
                   placeholderTextColor={c.textMuted}
                   selectTextOnFocus
                 />
+                <Text style={[styles.label, { color: c.textMuted }]}>Highlight</Text>
+                <ColorPicker value={color} onChange={setColor} />
                 <Button
                   label="Save"
                   disabled={!title.trim()}
-                  onPress={() => onSavePassage({ title: title.trim() }, draft)}
+                  onPress={() => onSavePassage({ title: title.trim(), color }, draft)}
                 />
               </ScrollView>
             ) : draft?.kind === 'note' ? (
@@ -129,10 +139,16 @@ export function CaptureSheet({
                   multiline
                   autoFocus
                 />
+                {draft.quote ? (
+                  <>
+                    <Text style={[styles.label, { color: c.textMuted }]}>Highlight the quote</Text>
+                    <ColorPicker value={color} onChange={setColor} />
+                  </>
+                ) : null}
                 <Button
                   label="Save note"
                   disabled={!content.trim()}
-                  onPress={() => onSaveNote({ title: title.trim(), content: content.trim() }, draft)}
+                  onPress={() => onSaveNote({ title: title.trim(), content: content.trim(), color }, draft)}
                 />
               </ScrollView>
             ) : null}

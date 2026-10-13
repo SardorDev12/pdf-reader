@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const MIGRATIONS: string[] = [
   `
@@ -75,6 +75,12 @@ const MIGRATIONS: string[] = [
     props TEXT,
     created_at TEXT NOT NULL
   );
+  `,
+  // v2: user-chosen highlight colour for saved words, passages and notes (NULL = default colour, 'none' = no highlight)
+  `
+  ALTER TABLE vocabulary ADD COLUMN color TEXT;
+  ALTER TABLE saved_passages ADD COLUMN color TEXT;
+  ALTER TABLE notes ADD COLUMN color TEXT;
   `,
 ];
 

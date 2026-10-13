@@ -10,6 +10,8 @@ body { overflow: auto; -webkit-text-size-adjust: 100%; }
 .textLayer span { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
 .textLayer br { display: none; }
 .textLayer ::selection { background: rgba(47, 111, 237, .35); }
+.hl-saved { position: absolute; pointer-events: none; border-radius: 2px; opacity: .45; mix-blend-mode: multiply; }
+body.dark .hl-saved { mix-blend-mode: normal; opacity: .4; }
 .hl { position: absolute; pointer-events: none; background: rgba(251, 191, 36, .6); border-radius: 2px; transition: opacity .5s; }
 body.sepia .page canvas { filter: sepia(.45) brightness(.97); }
 body.dark .page canvas { filter: invert(.92) hue-rotate(180deg); }

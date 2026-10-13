@@ -1,3 +1,4 @@
+import type { Highlight } from '@/lib/highlight';
 import type { Book, Bookmark, Location } from '@/lib/types';
 import type { ReaderTheme } from '@/store/settings';
 
@@ -43,6 +44,8 @@ export type ReaderViewProps = {
   zoom: number;
   width: number;
   height: number;
+  /** saved words, passages and notes to paint on the page, in the colour the user chose */
+  highlights: Highlight[];
   /** every saved item (word, passage, note, bookmark), so the engine can tell which are on the visible page */
   items: { id: string; location: Location }[];
   /** ids of the saved items on the visible page; called on every page change and whenever the saved items change */

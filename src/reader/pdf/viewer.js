@@ -23,7 +23,7 @@
   var viewer = document.getElementById('viewer');
   var S = {
     pdf: null, n: 0, pages: [], base: { w: 612, h: 792 }, zoom: OPTS.zoom || 1, scale: 1,
-    theme: OPTS.theme || 'light', sizesTo: 0, lastSel: null, outline: [],
+    theme: OPTS.theme || 'light', sizesTo: 0, lastSel: null, outline: [], saved: [],
   };
 
   /* ------------------------------ helpers -------------------------------- */
@@ -193,6 +193,7 @@
         p.el.insertBefore(canvas, p.el.firstChild);
         p.el.classList.add('done');
         p.state = 'done';
+        paintSaved(p);
         page.cleanup();
       });
     }).catch(function (e) {
@@ -208,7 +209,7 @@
     if (p.canvas) { p.canvas.width = 0; p.canvas.height = 0; if (p.canvas.parentNode) p.canvas.parentNode.removeChild(p.canvas); p.canvas = null; }
     if (p.tl && p.tl.parentNode) p.tl.parentNode.removeChild(p.tl);
     p.tl = null; p.divs = [];
-    var old = p.el.querySelectorAll('.hl'); for (var i = 0; i < old.length; i++) old[i].remove();
+    var old = p.el.querySelectorAll('.hl, .hl-saved'); for (var i = 0; i < old.length; i++) old[i].remove();
     p.el.classList.remove('done');
     p.state = 'idle';
   }
@@ -360,6 +361,30 @@
     });
     setTimeout(function () { els.forEach(function (d) { d.style.opacity = '0'; }); }, 2800);
     setTimeout(function () { els.forEach(function (d) { d.remove(); }); }, 3400);
+  }
+
+  /* -------------------------- saved (permanent) highlights --------------------- */
+
+  /** Draws the user's saved words/passages on one rendered page. Safe to call repeatedly. */
+  function paintSaved(p) {
+    var old = p.el.querySelectorAll('.hl-saved');
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    if (p.state !== 'done') return;
+    S.saved.forEach(function (h) {
+      var loc = h.location || {};
+      if (loc.page !== p.i + 1 || loc.startOffset == null || loc.endOffset == null) return;
+      highlightRects(p, loc.startOffset, loc.endOffset).forEach(function (r) {
+        var d = document.createElement('div');
+        d.className = 'hl-saved';
+        d.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;background:' + h.color;
+        p.el.appendChild(d);
+      });
+    });
+  }
+
+  function setHighlights(list) {
+    S.saved = Array.isArray(list) ? list : [];
+    for (var i = 0; i < S.pages.length; i++) if (S.pages[i].state === 'done') paintSaved(S.pages[i]);
   }
 
   /* -------------------------------- jump --------------------------------- */
@@ -550,6 +575,7 @@
 
   window.__pm = {
     setZoom: function (z) { setZoom(z); },
+    setHighlights: setHighlights,
     setTheme: applyTheme,
     jump: function (loc, hl) { return jump(loc, hl); },
     openBase64: function (b64) { S.pdf = null; return open({ data: b64ToBytes(b64), isEvalSupported: false }).catch(function (e) { post({ type: 'error', message: String((e && e.message) || e) }); showMessage('Could not open this PDF.'); }); },

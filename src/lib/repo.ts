@@ -136,6 +136,7 @@ type VocabRow = {
   meaning: string | null;
   location: string;
   chapter_label: string | null;
+  color: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -148,6 +149,7 @@ const mapVocab = (r: VocabRow): Vocabulary => ({
   meaning: r.meaning,
   location: parseLocation<Location>(r.location),
   chapterLabel: r.chapter_label,
+  color: r.color,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -173,13 +175,14 @@ export async function addVocabulary(input: {
   meaning?: string;
   location: Location;
   chapterLabel?: string | null;
+  color?: string | null;
 }): Promise<Vocabulary> {
   const db = await getDb();
   const id = newId();
   const t = now();
   await db.runAsync(
-    `INSERT INTO vocabulary (id, book_id, word, context, meaning, location, chapter_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO vocabulary (id, book_id, word, context, meaning, location, chapter_label, color, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.bookId,
     input.word,
@@ -187,6 +190,7 @@ export async function addVocabulary(input: {
     input.meaning?.trim() || null,
     JSON.stringify(input.location),
     input.chapterLabel ?? null,
+    input.color ?? null,
     t,
     t,
   );
@@ -212,6 +216,7 @@ type PassageRow = {
   text: string;
   location: string;
   chapter_label: string | null;
+  color: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -223,6 +228,7 @@ const mapPassage = (r: PassageRow): SavedPassage => ({
   text: r.text,
   location: parseLocation<Location>(r.location),
   chapterLabel: r.chapter_label,
+  color: r.color,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -241,18 +247,20 @@ export async function addPassage(input: {
   text: string;
   location: Location;
   chapterLabel?: string | null;
+  color?: string | null;
 }) {
   const db = await getDb();
   const t = now();
   await db.runAsync(
-    `INSERT INTO saved_passages (id, book_id, title, text, location, chapter_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO saved_passages (id, book_id, title, text, location, chapter_label, color, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     newId(),
     input.bookId,
     input.title,
     input.text,
     JSON.stringify(input.location),
     input.chapterLabel ?? null,
+    input.color ?? null,
     t,
     t,
   );
@@ -278,6 +286,7 @@ type NoteRow = {
   quote: string | null;
   location: string;
   chapter_label: string | null;
+  color: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -290,6 +299,7 @@ const mapNote = (r: NoteRow): Note => ({
   quote: r.quote,
   location: parseLocation<Location>(r.location),
   chapterLabel: r.chapter_label,
+  color: r.color,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -315,12 +325,13 @@ export async function addNote(input: {
   quote?: string | null;
   location: Location;
   chapterLabel?: string | null;
+  color?: string | null;
 }) {
   const db = await getDb();
   const t = now();
   await db.runAsync(
-    `INSERT INTO notes (id, book_id, title, content, quote, location, chapter_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO notes (id, book_id, title, content, quote, location, chapter_label, color, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     newId(),
     input.bookId,
     input.title,
@@ -328,6 +339,7 @@ export async function addNote(input: {
     input.quote ?? null,
     JSON.stringify(input.location),
     input.chapterLabel ?? null,
+    input.color ?? null,
     t,
     t,
   );
@@ -341,6 +353,13 @@ export async function updateNote(id: string, title: string, content: string) {
 export async function deleteNote(id: string) {
   const db = await getDb();
   await db.runAsync('DELETE FROM notes WHERE id = ?', id);
+}
+
+/** Changes the highlight colour of a saved word, passage or note. */
+export async function setItemColor(kind: 'word' | 'passage' | 'note', id: string, color: string) {
+  const table = { word: 'vocabulary', passage: 'saved_passages', note: 'notes' }[kind];
+  const db = await getDb();
+  await db.runAsync(`UPDATE ${table} SET color = ?, updated_at = ? WHERE id = ?`, color, now(), id);
 }
 
 /* ----------------------------- bookmarks -------------------------------- */

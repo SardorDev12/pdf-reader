@@ -2,8 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, EmptyState } from '@/components/ui';
-import { useBook, useDeleteWord, useUpdateMeaning, useWord } from '@/lib/hooks';
+import { Button, ColorPicker, EmptyState } from '@/components/ui';
+import { DEFAULT_HIGHLIGHT, paintColor } from '@/lib/highlight';
+import { useBook, useDeleteWord, useUpdateMeaning, useWord, useSetItemColor } from '@/lib/hooks';
 import { openInBook } from '@/lib/navigation';
 import { useColors } from '@/theme';
 
@@ -15,6 +16,7 @@ export default function WordDetail() {
   const { data: word } = useWord(id);
   const { data: book } = useBook(word?.bookId);
   const updateMeaning = useUpdateMeaning();
+  const setColor = useSetItemColor();
   const del = useDeleteWord();
   const [meaning, setMeaning] = useState('');
 
@@ -45,6 +47,9 @@ export default function WordDetail() {
         <Text style={[styles.label, { color: c.textMuted }]}>Context</Text>
         <Text style={[styles.context, { color: c.text, borderLeftColor: c.accent }]}>“{word.context}”</Text>
 
+        <Text style={[styles.label, { color: c.textMuted }]}>Highlight</Text>
+        <ColorPicker value={word.color ?? DEFAULT_HIGHLIGHT} onChange={(color) => setColor.mutate({ kind: 'word', id: word.id, color })} />
+
         <Text style={[styles.label, { color: c.textMuted }]}>Location</Text>
         <Text style={{ color: c.text, fontSize: 15 }}>
           {book?.title ?? 'Unknown book'}
@@ -58,7 +63,7 @@ export default function WordDetail() {
             disabled={!book}
             onPress={() => {
               router.dismiss();
-              openInBook(router, word.bookId, word.location, 'word');
+              openInBook(router, word.bookId, word.location, 'word', paintColor(word.color) === null);
             }}
           />
           <Button

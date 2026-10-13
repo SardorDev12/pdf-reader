@@ -2,8 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, EmptyState } from '@/components/ui';
-import { useBook, useDeleteNote, useNote, useUpdateNote } from '@/lib/hooks';
+import { Button, ColorPicker, EmptyState } from '@/components/ui';
+import { DEFAULT_HIGHLIGHT, paintColor } from '@/lib/highlight';
+import { useBook, useDeleteNote, useNote, useUpdateNote, useSetItemColor } from '@/lib/hooks';
 import { openInBook } from '@/lib/navigation';
 import { useColors } from '@/theme';
 
@@ -15,6 +16,7 @@ export default function NoteDetail() {
   const { data: note } = useNote(id);
   const { data: book } = useBook(note?.bookId);
   const update = useUpdateNote();
+  const setColor = useSetItemColor();
   const del = useDeleteNote();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -50,6 +52,13 @@ export default function NoteDetail() {
           />
         ) : null}
 
+        {note.quote ? (
+          <>
+          <Text style={[styles.label, { color: c.textMuted }]}>Highlight</Text>
+          <ColorPicker value={note.color ?? DEFAULT_HIGHLIGHT} onChange={(color) => setColor.mutate({ kind: 'note', id: note.id, color })} />
+          </>
+        ) : null}
+
         <Text style={[styles.label, { color: c.textMuted }]}>Location</Text>
         <Text style={{ color: c.text, fontSize: 15 }}>
           {book?.title ?? 'Unknown book'}
@@ -63,7 +72,7 @@ export default function NoteDetail() {
             disabled={!book}
             onPress={() => {
               router.dismiss();
-              openInBook(router, note.bookId, note.location, 'note');
+              openInBook(router, note.bookId, note.location, 'note', !!note.quote && paintColor(note.color) === null);
             }}
           />
           <Button

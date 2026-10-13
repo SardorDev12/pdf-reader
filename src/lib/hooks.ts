@@ -95,3 +95,11 @@ export function useDeleteBookmark() {
   const after = useAfterWrite();
   return useMutation({ mutationFn: repo.deleteBookmark, onSuccess: after });
 }
+
+export function useSetItemColor() {
+  const after = useAfterWrite();
+  return useMutation({
+    mutationFn: (v: { kind: 'word' | 'passage' | 'note'; id: string; color: string }) => repo.setItemColor(v.kind, v.id, v.color),
+    onSuccess: after,
+  });
+}

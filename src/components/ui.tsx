@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { HIGHLIGHT_COLORS, NO_HIGHLIGHT } from '@/lib/highlight';
 import type { Book } from '@/lib/types';
 import { useColors } from '@/theme';
 
@@ -167,6 +168,39 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Row of highlight colours (plus "no highlight"). `value` is a hex string or 'none'. */
+export function ColorPicker({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+  const c = useColors();
+  return (
+    <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Highlight colour">
+      {HIGHLIGHT_COLORS.map((col) => {
+        const selected = value.toLowerCase() === col.hex.toLowerCase();
+        return (
+          <Pressable
+            key={col.hex}
+            onPress={() => onChange(col.hex)}
+            accessibilityRole="radio"
+            accessibilityLabel={col.label}
+            accessibilityState={{ selected }}
+            style={[styles.swatch, { backgroundColor: col.hex, borderColor: selected ? c.text : 'transparent' }]}
+          >
+            {selected ? <Ionicons name="checkmark" size={18} color="#0B1437" /> : null}
+          </Pressable>
+        );
+      })}
+      <Pressable
+        onPress={() => onChange(NO_HIGHLIGHT)}
+        accessibilityRole="radio"
+        accessibilityLabel="No highlight"
+        accessibilityState={{ selected: value === NO_HIGHLIGHT }}
+        style={[styles.swatch, { borderColor: value === NO_HIGHLIGHT ? c.text : c.border }]}
+      >
+        <Ionicons name="ban-outline" size={18} color={c.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
 export function SectionTitle({ children }: { children: ReactNode }) {
   const c = useColors();
   return <Text style={[styles.sectionTitle, { color: c.textMuted }]}>{children}</Text>;
@@ -193,6 +227,8 @@ const styles = StyleSheet.create({
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   track: { height: 4, borderRadius: 2, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   segmented: { flexDirection: 'row', borderRadius: 12, padding: 3 },
   segment: { flex: 1, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },

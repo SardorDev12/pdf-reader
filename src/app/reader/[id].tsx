@@ -19,6 +19,7 @@ import { EdgeDrawer, EdgeZone } from '@/components/EdgeDrawer';
 import { Button, IconButton, Segmented } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { useAfterWrite, useBook, useBookmarks, useNotes, usePassages, useVocabulary } from '@/lib/hooks';
+import { NO_HIGHLIGHT, paintColor, type Highlight } from '@/lib/highlight';
 import { normalizeWord } from '@/lib/readerScripts';
 import * as repo from '@/lib/repo';
 import { hasLocation, type Bookmark, type BookFormat, type Location, type Note, type SavedPassage, type Vocabulary } from '@/lib/types';
@@ -46,7 +47,7 @@ export default function ReaderScreen() {
   const { data: passages = [] } = usePassages(id);
   const { data: notes = [] } = useNotes(id);
   const { data: bookmarks = [] } = useBookmarks(id);
-  const { fontSize, pdfZoom, setPdfZoom, readerTheme } = useSettings();
+  const { fontSize, pdfZoom, setPdfZoom, readerTheme, setHighlightColor } = useSettings();
   const colors = READER_COLORS[readerTheme];
   const engine = useRef<ReaderHandle>(null);
 
@@ -113,6 +114,19 @@ export default function ReaderScreen() {
   );
   const onPageSet = useMemo(() => new Set(visibleIds), [visibleIds]);
   const here = useCallback(<T extends { id: string }>(list: T[]) => list.filter((x) => onPageSet.has(x.id)), [onPageSet]);
+  // saved words, passages and notes are painted on the page in the colour the user picked (not for "no highlight")
+  const highlights = useMemo(() => {
+    const out: Highlight[] = [];
+    const add = (id: string, location: Location, stored?: string | null) => {
+      const color = paintColor(stored);
+      if (color && hasLocation(location)) out.push({ id, location, color });
+    };
+    words.forEach((w) => add(w.id, w.location, w.color));
+    passages.forEach((p) => add(p.id, p.location, p.color));
+    notes.forEach((n) => n.quote && add(n.id, n.location, n.color));
+    return out;
+  }, [words, passages, notes]);
+
   const pageWords = useMemo(() => here(words), [here, words]);
   const pagePassages = useMemo(() => here(passages), [here, passages]);
   const pageNotes = useMemo(() => here(notes), [here, notes]);
@@ -194,9 +208,15 @@ export default function ReaderScreen() {
     setDraft({ kind: 'note', ...hereDraft(), quote: '' });
   };
 
-  const saveWord = async (v: { word: string; meaning: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => {
+  /** the colour picked now is pre-selected next time */
+  const rememberColor = (color: string) => {
+    if (color !== NO_HIGHLIGHT) setHighlightColor(color);
+  };
+
+  const saveWord = async (v: { word: string; meaning: string; color: string }, d: Extract<CaptureDraft, { kind: 'word' }>) => {
     if (!id) return;
     setDraft(null);
+    rememberColor(v.color);
     await repo.addVocabulary({
       bookId: id,
       word: v.word,
@@ -204,28 +224,32 @@ export default function ReaderScreen() {
       context: d.context,
       location: d.location,
       chapterLabel: d.chapterLabel ?? null,
+      color: v.color,
     });
     track('word_saved', { bookId: id });
     afterWrite();
   };
 
-  const savePassage = async (v: { title: string }, d: Extract<CaptureDraft, { kind: 'passage' }>) => {
+  const savePassage = async (v: { title: string; color: string }, d: Extract<CaptureDraft, { kind: 'passage' }>) => {
     if (!id) return;
     setDraft(null);
+    rememberColor(v.color);
     await repo.addPassage({
       bookId: id,
       title: v.title,
       text: d.text,
       location: d.location,
       chapterLabel: d.chapterLabel ?? null,
+      color: v.color,
     });
     track('passage_saved', { bookId: id });
     afterWrite();
   };
 
-  const saveNote = async (v: { title: string; content: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => {
+  const saveNote = async (v: { title: string; content: string; color: string }, d: Extract<CaptureDraft, { kind: 'note' }>) => {
     if (!id) return;
     setDraft(null);
+    if (d.quote) rememberColor(v.color);
     await repo.addNote({
       bookId: id,
       title: v.title,
@@ -233,6 +257,7 @@ export default function ReaderScreen() {
       quote: d.quote || null,
       location: d.location,
       chapterLabel: d.chapterLabel ?? null,
+      color: v.color,
     });
     track('note_saved', { bookId: id });
     afterWrite();
@@ -290,6 +315,7 @@ export default function ReaderScreen() {
     zoom: pdfZoom,
     width,
     height: readerHeight,
+    highlights,
     items: allItems,
     onVisibleItems: setVisibleIds,
     onPage,
@@ -356,7 +382,7 @@ export default function ReaderScreen() {
           words={pageWords}
           onJump={(w) => {
             track('vocabulary_opened', { bookId: id });
-            jumpTo(w.location);
+            jumpTo(w.location, paintColor(w.color) === null);
           }}
           onInfo={(w) => router.push({ pathname: '/word/[id]', params: { id: w.id } })}
         />
@@ -400,7 +426,7 @@ export default function ReaderScreen() {
             passages={pagePassages}
             onJump={(p) => {
               track('passage_opened', { bookId: id });
-              jumpTo(p.location);
+              jumpTo(p.location, paintColor(p.color) === null);
             }}
             onInfo={(p) => router.push({ pathname: '/passage/[id]', params: { id: p.id } })}
           />
@@ -409,7 +435,7 @@ export default function ReaderScreen() {
             notes={pageNotes}
             onJump={(n) => {
               track('note_opened', { bookId: id });
-              jumpTo(n.location, !!n.quote);
+              jumpTo(n.location, !!n.quote && paintColor(n.color) === null);
             }}
             onInfo={(n) => router.push({ pathname: '/note/[id]', params: { id: n.id } })}
           />

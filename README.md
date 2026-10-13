@@ -9,7 +9,8 @@ An offline-first Android EPUB and PDF reader (Expo + React Native) for building 
 
 - Swipe in from the **left edge** for vocabulary captured in the current book (words from the chapter you're in come first).
 - Swipe in from the **right edge** for saved passages.
-- Tap any item to jump to its exact place in the book; the passage is highlighted for a few seconds.
+- Tap any item to jump to its exact place in the book.
+- Saved words, passages and notes stay highlighted in a colour you choose when saving (change it any time on the item). Highlights survive text-size changes.
 - Long-press a word or select lines → **Add to Vocabulary** / **Save Passage** / **Add Note**.
 - Tap the bookmark icon in the top bar to bookmark the current page; everything lives in the Saved drawer (Passages · Notes · Marks).
 
@@ -28,6 +29,7 @@ npm run typecheck
 npm run build:pdf        # regenerate the bundled PDF viewer after editing src/reader/pdf/*
 npm run test:pdf         # browser regression test for the PDF viewer
 npm run test:epub        # (needs a local Chromium)
+npm run test:highlights  # permanent highlights, both engines (needs a local Chromium)
 ```
 
 ## Releasing

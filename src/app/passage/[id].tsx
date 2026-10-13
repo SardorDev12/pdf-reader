@@ -2,8 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, EmptyState } from '@/components/ui';
-import { useBook, useDeletePassage, usePassages, useRenamePassage } from '@/lib/hooks';
+import { Button, ColorPicker, EmptyState } from '@/components/ui';
+import { DEFAULT_HIGHLIGHT, paintColor } from '@/lib/highlight';
+import { useBook, useDeletePassage, usePassages, useRenamePassage, useSetItemColor } from '@/lib/hooks';
 import { openInBook } from '@/lib/navigation';
 import { useColors } from '@/theme';
 
@@ -16,6 +17,7 @@ export default function PassageDetail() {
   const passage = all.find((p) => p.id === id);
   const { data: book } = useBook(passage?.bookId);
   const rename = useRenamePassage();
+  const setColor = useSetItemColor();
   const del = useDeletePassage();
   const [title, setTitle] = useState('');
 
@@ -41,6 +43,9 @@ export default function PassageDetail() {
         <Text style={[styles.label, { color: c.textMuted }]}>Passage</Text>
         <Text style={[styles.text, { color: c.text, borderLeftColor: c.accent }]}>{passage.text}</Text>
 
+        <Text style={[styles.label, { color: c.textMuted }]}>Highlight</Text>
+        <ColorPicker value={passage.color ?? DEFAULT_HIGHLIGHT} onChange={(color) => setColor.mutate({ kind: 'passage', id: passage.id, color })} />
+
         <Text style={[styles.label, { color: c.textMuted }]}>Location</Text>
         <Text style={{ color: c.text, fontSize: 15 }}>
           {book?.title ?? 'Unknown book'}
@@ -54,7 +59,7 @@ export default function PassageDetail() {
             disabled={!book}
             onPress={() => {
               router.dismiss();
-              openInBook(router, passage.bookId, passage.location, 'passage');
+              openInBook(router, passage.bookId, passage.location, 'passage', paintColor(passage.color) === null);
             }}
           />
           <Button

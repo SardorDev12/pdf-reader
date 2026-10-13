@@ -45,6 +45,8 @@ export type Vocabulary = {
   meaning?: string | null;
   location: Location;
   chapterLabel?: string | null;
+  /** highlight colour: a hex string, 'none', or null for the default */
+  color?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -56,6 +58,8 @@ export type SavedPassage = {
   text: string;
   location: Location;
   chapterLabel?: string | null;
+  /** highlight colour: a hex string, 'none', or null for the default */
+  color?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +73,8 @@ export type Note = {
   quote?: string | null;
   location: Location;
   chapterLabel?: string | null;
+  /** highlight colour: a hex string, 'none', or null for the default */
+  color?: string | null;
   createdAt: string;
   updatedAt: string;
 };

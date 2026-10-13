@@ -7,14 +7,14 @@ import {
   type Theme,
 } from '@epubjs-react-native/core';
 import { useFileSystem } from '@epubjs-react-native/expo-file-system';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { newId } from '@/lib/ids';
 import { cfiOnPage } from '@/lib/cfi';
-import { contextScript } from '@/lib/readerScripts';
+import { contextScript, flashScript, highlightScript } from '@/lib/readerScripts';
 import type { Location } from '@/lib/types';
 import type { ReaderTheme } from '@/store/settings';
-import { palette, useColors } from '@/theme';
+import { useColors } from '@/theme';
 import { READER_COLORS } from './colors';
 import type { ReaderHandle, ReaderViewProps, SelectionKind } from './types';
 
@@ -55,6 +55,7 @@ function EpubInner({
   fontSize,
   width,
   height,
+  highlights,
   items,
   onVisibleItems,
   onPage,
@@ -65,7 +66,7 @@ function EpubInner({
   const c = useColors();
   const colors = READER_COLORS[theme];
   const epubTheme = useMemo(() => buildTheme(theme), [theme]);
-  const { goToLocation, changeTheme, changeFontSize, injectJavascript, addAnnotation, removeAnnotationByCfi } = useReader();
+  const { goToLocation, changeTheme, changeFontSize, injectJavascript } = useReader();
 
   // latest callbacks, so the menu items / reader handlers below can stay referentially stable
   const cb = useRef({ onPage, onSelect, onVisibleItems });
@@ -73,6 +74,14 @@ function EpubInner({
 
   const section = useRef<Section | null>(null);
   const readyRef = useRef(false);
+  const [ready, setReady] = useState(false);
+
+  // permanent highlights of saved items (kept aligned through reflows by the injected script)
+  useEffect(() => {
+    if (!ready) return;
+    const list = highlights.filter((h) => h.location.cfi).map((h) => ({ cfi: h.location.cfi!, color: h.color }));
+    injectJavascript(highlightScript(list, theme));
+  }, [ready, highlights, theme, injectJavascript]);
 
   /* --------------------- which saved items are on this page --------------------- */
 
@@ -125,17 +134,7 @@ function EpubInner({
 
   /* --------------------------- jump + highlight --------------------------- */
 
-  const flash = useCallback(
-    (cfi: string) => {
-      try {
-        addAnnotation('highlight', cfi, { temporary: true }, { color: palette.amber, opacity: 0.6 });
-        setTimeout(() => removeAnnotationByCfi(cfi), 3200);
-      } catch {
-        /* range may no longer resolve; navigation still worked */
-      }
-    },
-    [addAnnotation, removeAnnotationByCfi],
-  );
+  const flash = useCallback((cfi: string) => injectJavascript(flashScript(cfi)), [injectJavascript]);
 
   useImperativeHandle(
     handleRef,
@@ -151,6 +150,7 @@ function EpubInner({
 
   const onReady = useCallback(() => {
     readyRef.current = true;
+    setReady(true);
     changeFontSize(`${fontSize}%`);
     if (highlightOnOpen && initialLocation?.cfi) setTimeout(() => flash(initialLocation.cfi!), 1100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
